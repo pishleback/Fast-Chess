@@ -1,4 +1,4 @@
-use std::slice::SliceIndex;
+use std::{iter::Enumerate, slice::SliceIndex};
 pub trait Signature: Sized {
     fn num_sq(&self) -> usize;
 
@@ -98,13 +98,13 @@ pub trait Signature: Sized {
     fn starting_board(&self) -> Board;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Team {
     White,
     Black,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum PieceKind {
     Pawn,
     Rook,
@@ -143,29 +143,212 @@ pub enum Square {
 pub struct Board {
     turn: Team,
     squares: Vec<Square>,
-    moves: Vec<Move>,
+    white_pieces: Vec<(usize, PieceKind)>,
+    black_pieces: Vec<(usize, PieceKind)>,
 }
 
 impl Board {
-    pub fn new(turn: Team, squares: Vec<Square>) -> Board {
-        // assert_eq!(signature.num_sq(), squares.len());
-        return Board { turn, squares, moves : vec![] };
+    pub fn new_from_squares(turn: Team, squares: Vec<Square>) -> Self {
+        let mut white_pieces = vec![];
+        let mut black_pieces = vec![];
+
+        for (idx, sq) in squares.iter().enumerate() {
+            match sq {
+                Square::Occupied(piece) => match piece.team {
+                    Team::White => {
+                        white_pieces.push((idx, piece.kind.clone()));
+                    }
+                    Team::Black => {
+                        black_pieces.push((idx, piece.kind.clone()));
+                    }
+                },
+                Square::Unoccupied => {}
+            };
+        }
+
+        let board = Self {
+            turn,
+            squares,
+            white_pieces,
+            black_pieces,
+        };
+        board.validate_structure();
+        return board;
+    }
+
+    pub fn new_from_pieces(
+        turn: Team,
+        num: usize,
+        white_pieces: Vec<(usize, PieceKind)>,
+        black_pieces: Vec<(usize, PieceKind)>,
+    ) -> Self {
+        let mut squares = vec![Square::Unoccupied; num];
+        for (idx, kind) in &white_pieces {
+            squares[*idx] = Square::Occupied(Piece {
+                team: Team::White,
+                kind: kind.clone(),
+            });
+        }
+        for (idx, kind) in &black_pieces {
+            squares[*idx] = Square::Occupied(Piece {
+                team: Team::Black,
+                kind: kind.clone(),
+            });
+        }
+
+        let board = Self {
+            turn,
+            squares,
+            white_pieces,
+            black_pieces,
+        };
+        board.validate_structure();
+        return board;
+    }
+
+    fn validate_structure(&self) {
+        let mut white_count: usize = 0;
+        let mut black_count: usize = 0;
+        for (idx, sq) in self.squares.iter().enumerate() {
+            debug_assert!(idx < self.squares.len());
+            match &self.squares[idx] {
+                Square::Unoccupied => {}
+                Square::Occupied(piece) => match piece.team {
+                    Team::White => {
+                        white_count += 1;
+                    }
+                    Team::Black => {
+                        black_count += 1;
+                    }
+                },
+            };
+        }
+        debug_assert_eq!(white_count, self.white_pieces.len());
+        debug_assert_eq!(black_count, self.black_pieces.len());
+
+        for (idx, kind) in &self.black_pieces {
+            debug_assert!(idx < &self.squares.len());
+            debug_assert!(match &self.squares[*idx] {
+                Square::Unoccupied => false,
+                Square::Occupied(piece) => piece.team == Team::Black && &piece.kind == kind,
+            })
+        }
     }
 
     pub fn at(&self, idx: usize) -> &Square {
         return &self.squares[idx];
     }
+
+    pub fn generate_moves(&self) -> Vec<Move> {
+        let mut moves = vec![];
+
+        return moves
+    }
 }
 
-
-struct NormalMove<'a> {
-    board : &'a Board,
-    from_idx : usize,
-    to_idx : usize,
+pub struct NormalMove {
+    from_idx: usize,
+    to_idx: usize,
 }
 
-enum Move {
+pub enum Move {
     NormalMove,
+}
+
+pub struct MoveManager {
+    num: usize,
+    flat_slides: Vec<Vec<Vec<usize>>>,
+    diag_slides: Vec<Vec<Vec<usize>>>,
+    knight_moves: Vec<Vec<usize>>,
+    king_moves: Vec<Vec<usize>>,
+}
+
+impl MoveManager {
+    pub fn new<'a, S: Signature>(signature: &'a S) -> Self {
+        let num = signature.num_sq();
+
+        let flat_slides = (0..num)
+            .map(|a| {
+                let mut ans = signature.gen_slides(
+                    a,
+                    |i| signature.flat_nbs(i),
+                    |i, j| signature.flat_opp(i, j),
+                );
+                //remove duplicates
+                ans.sort();
+                ans.dedup();
+                ans
+            })
+            .collect();
+
+        let diag_slides = (0..num)
+            .map(|a| {
+                let mut ans = signature.gen_slides(
+                    a,
+                    |i| signature.diag_nbs(i),
+                    |i, j| signature.diag_opp(i, j),
+                );
+                //remove duplicates
+                ans.sort();
+                ans.dedup();
+                ans
+            })
+            .collect();
+
+        let knight_moves = (0..num)
+            .map(|a| {
+                let mut ans: Vec<usize> = vec![];
+                //flat 2 side 1
+                for b in signature.flat_nbs(a) {
+                    for c in signature.flat_opp(a, b) {
+                        for d in signature.flat_nopp(b, c) {
+                            ans.push(d);
+                        }
+                    }
+                }
+                //side 1 flat 2
+                for b in signature.flat_nbs(a) {
+                    for c in signature.flat_nopp(a, b) {
+                        for d in signature.flat_opp(b, c) {
+                            ans.push(d);
+                        }
+                    }
+                }
+                //remove duplicates
+                ans.sort();
+                ans.dedup();
+                ans
+            })
+            .collect();
+
+        let king_moves = (0..num)
+            .map(|a| {
+                let mut ans: Vec<usize> = vec![];
+                for b in signature.flat_nbs(a) {
+                    ans.push(b);
+                }
+                for b in signature.diag_nbs(a) {
+                    ans.push(b);
+                }
+                //remove duplicates
+                ans.sort();
+                ans.dedup();
+                ans
+            })
+            .collect();
+
+        Self {
+            num,
+            flat_slides,
+            diag_slides,
+            knight_moves,
+            king_moves,
+        }
+    }
+
+    fn generate_moves(board: Board) -> Vec<Move> {
+        vec![]
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -187,97 +370,20 @@ pub trait Interface<'a, S: Signature> {
 
 pub struct Game<'a, S: Signature, I: Interface<'a, S>> {
     signature: &'a S,
+    move_manager: MoveManager,
     interface: I,
-    n_sq: usize,
-
-    flat_slides: Vec<Vec<Vec<usize>>>,
-    diag_slides: Vec<Vec<Vec<usize>>>,
-    knight_moves: Vec<Vec<usize>>,
-    king_moves: Vec<Vec<usize>>,
 
     board_history: Vec<Board>,
 }
 
 impl<'a, S: Signature, I: Interface<'a, S>> Game<'a, S, I> {
     pub fn new(signature: &'a S) -> Self {
-        let n_sq = signature.num_sq();
-
         let starting_board = signature.starting_board();
+        let move_manager = MoveManager::new(signature);
         Self {
             signature: signature,
-            interface: I::new(&signature),
-
-            n_sq: n_sq,
-
-            flat_slides: (0..n_sq)
-                .map(|a| {
-                    let mut ans = signature.gen_slides(
-                        a,
-                        |i| signature.flat_nbs(i),
-                        |i, j| signature.flat_opp(i, j),
-                    );
-                    //remove duplicates
-                    ans.sort();
-                    ans.dedup();
-                    ans
-                })
-                .collect(),
-
-            diag_slides: (0..n_sq)
-                .map(|a| {
-                    let mut ans = signature.gen_slides(
-                        a,
-                        |i| signature.diag_nbs(i),
-                        |i, j| signature.diag_opp(i, j),
-                    );
-                    //remove duplicates
-                    ans.sort();
-                    ans.dedup();
-                    ans
-                })
-                .collect(),
-
-            knight_moves: (0..n_sq)
-                .map(|a| {
-                    let mut ans: Vec<usize> = vec![];
-                    //flat 2 side 1
-                    for b in signature.flat_nbs(a) {
-                        for c in signature.flat_opp(a, b) {
-                            for d in signature.flat_nopp(b, c) {
-                                ans.push(d);
-                            }
-                        }
-                    }
-                    //side 1 flat 2
-                    for b in signature.flat_nbs(a) {
-                        for c in signature.flat_nopp(a, b) {
-                            for d in signature.flat_opp(b, c) {
-                                ans.push(d);
-                            }
-                        }
-                    }
-                    //remove duplicates
-                    ans.sort();
-                    ans.dedup();
-                    ans
-                })
-                .collect(),
-
-            king_moves: (0..n_sq)
-                .map(|a| {
-                    let mut ans: Vec<usize> = vec![];
-                    for b in signature.flat_nbs(a) {
-                        ans.push(b);
-                    }
-                    for b in signature.diag_nbs(a) {
-                        ans.push(b);
-                    }
-                    //remove duplicates
-                    ans.sort();
-                    ans.dedup();
-                    ans
-                })
-                .collect(),
+            move_manager: move_manager,
+            interface: I::new(signature),
 
             board_history: vec![starting_board],
         }
@@ -293,28 +399,5 @@ impl<'a, S: Signature, I: Interface<'a, S>> Game<'a, S, I> {
     pub fn run(&self) {
         let current_board = self.current_board();
         self.interface.show_board(current_board, vec![]);
-
-        for idx in 0..self.n_sq {
-            self.interface.show_board(current_board, {
-                let mut ans = vec![];
-                for s in &self.flat_slides[idx] {
-                    for i in s {
-                        ans.push(Highlight {
-                            idx: *i,
-                            kind: HighlightKind::Test,
-                        });
-                    }
-                }
-                for s in &self.diag_slides[idx] {
-                    for i in s {
-                        ans.push(Highlight {
-                            idx: *i,
-                            kind: HighlightKind::Test,
-                        });
-                    }
-                }
-                ans
-            });
-        }
     }
 }

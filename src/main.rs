@@ -139,7 +139,7 @@ impl Signature for ClassicalSignature {
             Square::Occupied(Piece::new(Team::Black, PieceKind::Knight));
         squares[self.sq_to_idx(7, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Rook));
 
-        return Board::new(Team::White, squares);
+        return Board::new_from_squares(Team::White, squares);
     }
 }
 
