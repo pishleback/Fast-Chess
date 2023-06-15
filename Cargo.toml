@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 colored = "2"
-num = "0.4"
