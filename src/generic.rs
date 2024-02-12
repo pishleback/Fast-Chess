@@ -1,5 +1,4 @@
-use std::{iter::Enumerate, slice::SliceIndex};
-
+#[derive(Debug)]
 pub struct Signature {
     num: usize,
     flat_slides: Vec<Vec<Vec<usize>>>,
@@ -168,13 +167,13 @@ impl Signature {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Team {
     White,
     Black,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PieceKind {
     Pawn,
     Rook,
@@ -184,10 +183,10 @@ pub enum PieceKind {
     King,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Piece {
-    team: Team,
-    kind: PieceKind,
+    pub team: Team,
+    pub kind: PieceKind,
 }
 
 impl Piece {
@@ -204,12 +203,13 @@ impl Piece {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Square {
     Unoccupied,
     Occupied(Piece),
 }
 
+#[derive(Debug, Clone)]
 pub struct Board {
     turn: Team,
     squares: Vec<Square>,
@@ -242,7 +242,7 @@ impl Board {
             white_pieces,
             black_pieces,
         };
-        board.validate_structure();
+        board.validate();
         return board;
     }
 
@@ -272,11 +272,11 @@ impl Board {
             white_pieces,
             black_pieces,
         };
-        board.validate_structure();
+        board.validate();
         return board;
     }
 
-    fn validate_structure(&self) {
+    fn validate(&self) {
         let mut white_count: usize = 0;
         let mut black_count: usize = 0;
         for (idx, sq) in self.squares.iter().enumerate() {
@@ -312,56 +312,79 @@ impl Board {
     pub fn get_turn(&self) -> &Team {
         &self.turn
     }
-}
 
-#[derive(Clone, Copy)]
-pub enum HighlightKind {
-    Test,
-}
-
-#[derive(Clone, Copy)]
-pub struct Highlight {
-    pub idx: usize,
-    pub kind: HighlightKind,
-}
-
-pub trait Interface {
-    fn show_board(&self, board: &Board, highlights: Vec<Highlight>);
-}
-
-pub fn run(signature: Signature, interface: &dyn Interface) {
-    interface.show_board(signature.get_starting_board(), vec![]);
-
-    let num = signature.get_num();
-
-    for idx in 0..num {
-        let mut highlights: Vec<Highlight> = vec![];
-
-        // highlights.extend(signature.king_moves[idx].iter().map(|jdx| -> Highlight {
-        //     Highlight {
-        //         idx: *jdx,
-        //         kind: HighlightKind::Test,
-        //     }
-        // }));
-
-        for slide in &signature.flat_slides[idx] {
-            for jdx in slide {
-                highlights.push(Highlight {
-                    idx: *jdx,
-                    kind: HighlightKind::Test,
-                });
-            }
+    pub fn get_pieces(&self) -> Vec<(usize, Piece)> {
+        let mut pieces = vec![];
+        for (sq, piece_kind) in &self.white_pieces {
+            pieces.push((
+                *sq,
+                Piece {
+                    team: Team::White,
+                    kind: piece_kind.clone(),
+                },
+            ));
         }
-
-        for slide in &signature.diag_slides[idx] {
-            for jdx in slide {
-                highlights.push(Highlight {
-                    idx: *jdx,
-                    kind: HighlightKind::Test,
-                });
-            }
+        for (sq, piece_kind) in &self.black_pieces {
+            pieces.push((
+                *sq,
+                Piece {
+                    team: Team::Black,
+                    kind: piece_kind.clone(),
+                },
+            ));
         }
-
-        interface.show_board(signature.get_starting_board(), highlights);
+        pieces
     }
 }
+
+// #[derive(Clone, Copy)]
+// pub enum HighlightKind {
+//     Test,
+// }
+
+// #[derive(Clone, Copy)]
+// pub struct Highlight {
+//     pub idx: usize,
+//     pub kind: HighlightKind,
+// }
+
+// pub trait Interface {
+//     fn show_board(&self, board: &Board, highlights: Vec<Highlight>);
+// }
+
+// pub fn run(signature: Signature, interface: &dyn Interface) {
+//     interface.show_board(signature.get_starting_board(), vec![]);
+
+//     let num = signature.get_num();
+
+//     for idx in 0..num {
+//         let mut highlights: Vec<Highlight> = vec![];
+
+//         // highlights.extend(signature.king_moves[idx].iter().map(|jdx| -> Highlight {
+//         //     Highlight {
+//         //         idx: *jdx,
+//         //         kind: HighlightKind::Test,
+//         //     }
+//         // }));
+
+//         for slide in &signature.flat_slides[idx] {
+//             for jdx in slide {
+//                 highlights.push(Highlight {
+//                     idx: *jdx,
+//                     kind: HighlightKind::Test,
+//                 });
+//             }
+//         }
+
+//         for slide in &signature.diag_slides[idx] {
+//             for jdx in slide {
+//                 highlights.push(Highlight {
+//                     idx: *jdx,
+//                     kind: HighlightKind::Test,
+//                 });
+//             }
+//         }
+
+//         interface.show_board(signature.get_starting_board(), highlights);
+//     }
+// }

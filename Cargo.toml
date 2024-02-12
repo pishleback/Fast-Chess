@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 colored = "2"
+image = "0.24"
+glium = "0.32"
