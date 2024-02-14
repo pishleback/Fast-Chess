@@ -2,74 +2,77 @@ use crate::generic::*;
 use colored::Colorize;
 use std::collections::HashMap;
 
-pub mod terminal;
+// pub mod terminal;
 pub mod graphical;
 
-fn idx_to_sq(idx: usize) -> (u8, u8) {
+fn sq_to_grid(sq: Square) -> (u8, u8) {
+    let idx = sq.idx;
     assert!(idx < 64);
     (idx as u8 % 8, idx as u8 / 8)
 }
 
-fn sq_to_idx(x: u8, y: u8) -> usize {
+fn grid_to_sq(x: u8, y: u8) -> Square {
     assert!(x < 8 && y < 8);
-    return (x + y * 8) as usize;
+    return Square {
+        idx: (x + y * 8) as usize,
+    };
 }
 
-pub fn create_signature() -> Signature {
-    let opp = |i: usize, j: usize| -> Vec<usize> {
-        let (xi, yi) = idx_to_sq(i);
-        let (xj, yj) = idx_to_sq(j);
+pub fn create_signature() -> signature::Signature {
+    let opp = |i: Square, j: Square| -> Vec<Square> {
+        let (xi, yi) = sq_to_grid(i);
+        let (xj, yj) = sq_to_grid(j);
         let (xk, yk) = (2 * xj as i8 - xi as i8, 2 * yj as i8 - yi as i8);
         if 0 <= xk && xk < 8 && 0 <= yk && yk < 8 {
-            return vec![sq_to_idx(xk as u8, yk as u8)];
+            return vec![grid_to_sq(xk as u8, yk as u8)];
         }
         return vec![];
     };
 
-    let flat_nbs = |idx: usize| -> Vec<usize> {
-        let mut nbs: Vec<usize> = vec![];
-        let (x, y) = idx_to_sq(idx);
+    let flat_nbs = |idx: Square| -> Vec<Square> {
+        let mut nbs: Vec<Square> = vec![];
+        let (x, y) = sq_to_grid(idx);
         for (dx, dy) in vec![(1i8, 0i8), (-1, 0), (0, 1), (0, -1)] {
             let (ax, ay) = ((x as i8) + dx, (y as i8) + dy);
             if 0 <= ax && ax < 8 && 0 <= ay && ay < 8 {
-                nbs.push(sq_to_idx(ax as u8, ay as u8));
+                nbs.push(grid_to_sq(ax as u8, ay as u8));
             }
         }
         return nbs;
     };
 
-    let diag_nbs = |idx: usize| -> Vec<usize> {
-        let mut nbs: Vec<usize> = vec![];
-        let (x, y) = idx_to_sq(idx);
+    let diag_nbs = |idx: Square| -> Vec<Square> {
+        let mut nbs: Vec<Square> = vec![];
+        let (x, y) = sq_to_grid(idx);
         for (dx, dy) in vec![(1i8, 1i8), (1, -1), (-1, 1), (-1, -1)] {
             let (ax, ay) = ((x as i8) + dx, (y as i8) + dy);
             if 0 <= ax && ax < 8 && 0 <= ay && ay < 8 {
-                nbs.push(sq_to_idx(ax as u8, ay as u8));
+                nbs.push(grid_to_sq(ax as u8, ay as u8));
             }
         }
         return nbs;
     };
 
-    let pawn_moves = |team: Team, idx: usize| -> (Vec<usize>, Vec<usize>) {
-        let (x, y) = idx_to_sq(idx);
+    let pawn_moves = |team: Team, idx: Square| -> Vec<(Square, Vec<Square>)> {
+        let (x, y) = sq_to_grid(idx);
 
         match (team, y) {
-            (_, 0) => (vec![], vec![]),
-            (_, 7) => (vec![], vec![]),
+            (_, 0) => vec![],
+            (_, 7) => vec![],
             (Team::White, y) => {
                 if y == 1 {
-                    (vec![sq_to_idx(x, y + 1)], vec![sq_to_idx(x, y + 2)])
+                    vec![(grid_to_sq(x, y + 1), vec![grid_to_sq(x, y + 2)])]
                 } else if y <= 6 {
-                    (vec![sq_to_idx(x, y + 1)], vec![])
+                    vec![(grid_to_sq(x, y + 1), vec![])]
                 } else {
                     panic!()
                 }
             }
             (Team::Black, y) => {
                 if y == 6 {
-                    (vec![sq_to_idx(x, y - 1)], vec![sq_to_idx(x, y - 2)])
+                    vec![(grid_to_sq(x, y - 1), vec![grid_to_sq(x, y - 2)])]
                 } else if y >= 1 {
-                    (vec![sq_to_idx(x, y - 1)], vec![])
+                    vec![(grid_to_sq(x, y - 1), vec![])]
                 } else {
                     panic!()
                 }
@@ -77,49 +80,40 @@ pub fn create_signature() -> Signature {
         }
     };
 
-    let starting_board: Board = {
-        let mut squares: Vec<Square> = vec![Square::Unoccupied; 64];
-
-        //white team
-        for x in 0..8u8 {
-            squares[sq_to_idx(x, 1)] = Square::Occupied(Piece::new(Team::White, PieceKind::Pawn));
-        }
-        squares[sq_to_idx(0, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::Rook));
-        squares[sq_to_idx(1, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::Knight));
-        squares[sq_to_idx(2, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::Bishop));
-        squares[sq_to_idx(3, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::Queen));
-        squares[sq_to_idx(4, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::King));
-        squares[sq_to_idx(5, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::Bishop));
-        squares[sq_to_idx(6, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::Knight));
-        squares[sq_to_idx(7, 0)] = Square::Occupied(Piece::new(Team::White, PieceKind::Rook));
-
-        //black team
-        for x in 0..8u8 {
-            squares[sq_to_idx(x, 6)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Pawn));
-        }
-        squares[sq_to_idx(0, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Rook));
-        squares[sq_to_idx(1, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Knight));
-        squares[sq_to_idx(2, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Bishop));
-        squares[sq_to_idx(3, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Queen));
-        squares[sq_to_idx(4, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::King));
-        squares[sq_to_idx(5, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Bishop));
-        squares[sq_to_idx(6, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Knight));
-        squares[sq_to_idx(7, 7)] = Square::Occupied(Piece::new(Team::Black, PieceKind::Rook));
-
-        Board::new_from_squares(Team::White, squares)
-    };
-
-    Signature::new(
-        64,
-        &flat_nbs,
-        &diag_nbs,
-        &opp,
-        &opp,
-        &pawn_moves,
-        starting_board,
-    )
+    signature::Signature::new(64, &flat_nbs, &diag_nbs, &opp, &opp, &pawn_moves)
 }
 
+pub fn create_game() -> Board {
+    //white team
+    let mut white_pieces = HashMap::new();
+    for x in 0..8u8 {
+        white_pieces.insert(grid_to_sq(x, 1), PieceKind::Pawn);
+    }
+    white_pieces.insert(grid_to_sq(0, 0), PieceKind::Rook);
+    white_pieces.insert(grid_to_sq(1, 0), PieceKind::Knight);
+    white_pieces.insert(grid_to_sq(2, 0), PieceKind::Bishop);
+    white_pieces.insert(grid_to_sq(3, 0), PieceKind::Queen);
+    white_pieces.insert(grid_to_sq(4, 0), PieceKind::King);
+    white_pieces.insert(grid_to_sq(5, 0), PieceKind::Bishop);
+    white_pieces.insert(grid_to_sq(6, 0), PieceKind::Knight);
+    white_pieces.insert(grid_to_sq(7, 0), PieceKind::Rook);
+
+    //black team
+    let mut black_pieces = HashMap::new();
+    for x in 0..8u8 {
+        black_pieces.insert(grid_to_sq(x, 6), PieceKind::Pawn);
+    }
+    black_pieces.insert(grid_to_sq(0, 7), PieceKind::Rook);
+    black_pieces.insert(grid_to_sq(1, 7), PieceKind::Knight);
+    black_pieces.insert(grid_to_sq(2, 7), PieceKind::Bishop);
+    black_pieces.insert(grid_to_sq(3, 7), PieceKind::Queen);
+    black_pieces.insert(grid_to_sq(4, 7), PieceKind::King);
+    black_pieces.insert(grid_to_sq(5, 7), PieceKind::Bishop);
+    black_pieces.insert(grid_to_sq(6, 7), PieceKind::Knight);
+    black_pieces.insert(grid_to_sq(7, 7), PieceKind::Rook);
+
+    Board::new(Team::White, create_signature(), white_pieces, black_pieces)
+}
 
 #[cfg(test)]
 mod tests {
@@ -128,14 +122,15 @@ mod tests {
     #[test]
     fn test() {
         for idx in 0..64usize {
-            let (x, y) = idx_to_sq(idx);
-            assert_eq!(sq_to_idx(x, y), idx);
+            let sq = Square { idx };
+            let (x, y) = sq_to_grid(sq);
+            assert_eq!(grid_to_sq(x, y), sq);
         }
 
         for x in 0..8u8 {
             for y in 0..8u8 {
-                let idx = sq_to_idx(x, y);
-                assert_eq!(idx_to_sq(idx), (x, y));
+                let sq = grid_to_sq(x, y);
+                assert_eq!(sq_to_grid(sq), (x, y));
             }
         }
     }
