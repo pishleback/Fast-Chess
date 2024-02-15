@@ -6,7 +6,7 @@ use glium::{implement_vertex, uniform, Program, Surface};
 use crate::classical;
 use crate::graphical::Canvas;
 
-use self::info::{Move, MoveIdx};
+use self::{Move, MoveIdx};
 
 use super::super::generic;
 use super::*;
@@ -74,7 +74,7 @@ impl Textures {
 struct MoveButton {
     pos: (u8, u8),
     colour: (f32, f32, f32),
-    move_idx: generic::info::MoveIdx,
+    move_idx: generic::MoveIdx,
 }
 
 pub struct GameInterface {
@@ -629,7 +629,7 @@ impl GameInterface {
                     .map(|(idx, m)| (MoveIdx { idx }, *m))
                 {
                     match m {
-                        info::Move::Move {
+                        Move::Move {
                             piece,
                             from_sq,
                             to_sq,
@@ -642,7 +642,7 @@ impl GameInterface {
                                 });
                             }
                         }
-                        info::Move::Capture {
+                        Move::Capture {
                             piece,
                             victim,
                             from_sq,
@@ -663,7 +663,7 @@ impl GameInterface {
         }
     }
 
-    fn make_move(&mut self, m: info::MoveIdx) {
+    fn make_move(&mut self, m: MoveIdx) {
         self.set_selected(None);
         let (mut ai_off, best_move) = self.board_ai.take().unwrap().finish();
         ai_off.make_move(m);

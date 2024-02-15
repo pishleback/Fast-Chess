@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::{sleep_ms, JoinHandle, Thread};
 use std::time::Duration;
 
-use super::info::*;
+use super::board_data::*;
+use super::score::*;
 use super::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,45 +14,25 @@ struct ApproxScore {
 }
 
 #[derive(Debug, Clone)]
-struct BoardData {
-    info: BoardInfo,
-    moves: Vec<MoveData>,
-}
-
-impl BoardData {
-    fn new(board: &Board) -> Self {
-        let info = board.generate_info();
-        let moves = info.get_moves(board.get_turn()).clone();
-        Self {
-            info: info,
-            moves: moves
-                .into_iter()
-                .map(|mv| MoveData {
-                    mv: mv,
-                    board: None,
-                    score: None,
-                })
-                .collect(),
-        }
-    }
-
-    fn get_moves(&self) -> Vec<Move> {
-        self.moves.iter().map(|move_data| (move_data.mv)).collect()
-    }
-
-    fn get_move(&self, move_idx: MoveIdx) -> &MoveData {
-        &self.moves[move_idx.idx]
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MoveData {
+pub struct MoveData {
     mv: Move,
     board: Option<BoardData>,
     score: Option<ApproxScore>,
 }
 
 impl MoveData {
+    pub fn new(mv: Move) -> Self {
+        Self {
+            mv,
+            board: None,
+            score: None,
+        }
+    }
+
+    pub fn get_move(&self) -> Move {
+        self.mv
+    }
+
     fn get_board(&mut self, board: &Board) -> &mut BoardData {
         if self.board.is_none() {
             self.board = Some(BoardData::new(board));
@@ -62,7 +43,7 @@ impl MoveData {
     fn get_approx_score(&self) -> Score {
         match &self.score {
             Some(approx_score) => approx_score.score,
-            None => Score::Finite(0),
+            None => Score::Heuristic(0),
         }
     }
 
@@ -70,9 +51,20 @@ impl MoveData {
         &mut self,
         stop_check: &impl Fn() -> bool,
         board: &mut Board,
-        depth: usize,
+        max_depth: usize,
+        max_quiesce_depth: usize,
     ) -> Result<Score, ()> {
-        self.alpha_beta(stop_check, board, depth, Score::NegInf, Score::PosInf)
+        let mut node_count = 0;
+        self.alpha_beta(
+            stop_check,
+            board,
+            0,
+            max_depth,
+            max_quiesce_depth,
+            Score::NegInf,
+            Score::PosInf,
+            &mut node_count,
+        )
     }
 
     fn alpha_beta(
@@ -80,9 +72,14 @@ impl MoveData {
         stop_check: &impl Fn() -> bool,
         board: &mut Board,
         depth: usize,
+        max_depth: usize,
+        max_quiesce_depth: usize,
         mut alpha: Score,
         beta: Score,
+        node_count: &mut usize,
     ) -> Result<Score, ()> {
+        *node_count += 1;
+
         if stop_check() {
             return Err(());
         }
@@ -90,25 +87,38 @@ impl MoveData {
         //alpha is the score we already know we can achive
         //beta is the score the opponent knows they can achive
         let board_data = self.get_board(board);
+        if board_data.is_terminal() {
+            return Ok(-board_data.get_evaluation());
+        }
 
         let score = -{
-            if depth == 0 {
-                -self.quiesce(stop_check, board, 0, alpha, beta)?
+            if depth >= max_depth {
+                -self.quiesce(stop_check, board, depth + 1, max_quiesce_depth, alpha, beta)?
                 // match board.get_turn() {
                 //     Team::White => board_data.info.raw_score(),
                 //     Team::Black => -board_data.info.raw_score(),
                 // }
             } else {
                 let mut bestscore = Score::NegInf;
-                let mut moves = board_data.moves.iter_mut().collect::<Vec<_>>();
+                let mut moves = board_data
+                    .get_moves_data_mut()
+                    .iter_mut()
+                    .collect::<Vec<_>>();
                 moves.sort_by_key(|mv| -mv.get_approx_score());
                 for move_data in &mut moves {
                     let m = move_data.mv;
                     // let og_board = self.board.clone();
                     board.make_move(m);
-                    if let Ok(score) =
-                        move_data.alpha_beta(stop_check, board, depth - 1, -beta, -alpha)
-                    {
+                    if let Ok(score) = move_data.alpha_beta(
+                        stop_check,
+                        board,
+                        depth + 1,
+                        max_depth,
+                        max_quiesce_depth,
+                        -beta,
+                        -alpha,
+                        node_count,
+                    ) {
                         board.unmake_move(m);
                         // debug_assert_eq!(self.board, &og_board);
                         if score > bestscore {
@@ -136,7 +146,8 @@ impl MoveData {
         &mut self,
         stop_check: &impl Fn() -> bool,
         board: &mut Board,
-        deep: usize,
+        depth: usize,
+        max_quiesce_depth: usize,
         mut alpha: Score,
         beta: Score,
     ) -> Result<Score, ()> {
@@ -147,53 +158,67 @@ impl MoveData {
         //alpha is the score we already know we can achive
         //beta is the score the opponent knows they can achive
         let board_data = self.get_board(board);
+        if board_data.is_terminal() {
+            return Ok(-board_data.get_evaluation());
+        }
+
         let score = -{
-            let mut bestscore = match board.get_turn() {
-                Team::White => board_data.info.raw_score(),
-                Team::Black => -board_data.info.raw_score(),
-            }; //not valid in late game when null move observation is false
-            // let mut moves = board_data.moves.iter_mut().collect::<Vec<_>>();
-            // moves.sort_by_key(|mv| -match mv.mv {
-            //     Move::Move {
-            //         piece,
-            //         from_sq,
-            //         to_sq,
-            //     } => Score::Finite(0),
-            //     Move::Capture {
-            //         piece,
-            //         victim,
-            //         from_sq,
-            //         to_sq,
-            //     } => victim.kind.worth(),
-            // });
-            // for move_data in &mut moves {
-            //     let m = move_data.mv;
-            //     if match m {
-            //         Move::Move { .. } => false,
-            //         Move::Capture { .. } => true,
-            //     } {
-            //         // let og_board = self.board.clone();
-            //         board.make_move(m);
-            //         if let Ok(score) = move_data.quiesce(stop_check, board, deep + 1, -beta, -alpha)
-            //         {
-            //             board.unmake_move(m);
-            //             // debug_assert_eq!(self.board, &og_board);
-            //             if score > bestscore {
-            //                 bestscore = score;
-            //                 if score > alpha {
-            //                     alpha = score;
-            //                 }
-            //             }
-            //             if score >= beta {
-            //                 break; //the opponent already has a method to avoid us getting this score here, so we can stop looking
-            //             }
-            //         } else {
-            //             board.unmake_move(m);
-            //             return Err(());
-            //         }
-            //     }
-            // }
-            bestscore
+            let standpat = board_data.get_evaluation();
+            if depth >= max_quiesce_depth {
+                standpat
+            } else {
+                // if alpha < standpat {
+                //     alpha = standpat;
+                // }
+                // if standpat >= beta {
+                //     return Ok(standpat);
+                // }
+                let mut bestscore = standpat; // valid by null move observation, not as valid in very late game
+                let mut moves = board_data
+                    .get_moves_data_mut()
+                    .iter_mut()
+                    .collect::<Vec<_>>();
+                moves.sort_by_key(|mv| -mv.get_approx_score());
+                for move_data in &mut moves {
+                    let m = move_data.mv;
+                    if let Some(material_gain) = match m {
+                        Move::Move { .. } => None,
+                        Move::Capture { victim, .. } => Some(victim.kind.worth().unwrap() * 1000),
+                    } {
+                        // if standpat + material_gain + Score::Finite(2000) < alpha {
+                        //     //delta prune
+                        //     println!("delta prune {:?}", deep);
+                        // } else {
+                        // let og_board = self.board.clone();
+                        board.make_move(m);
+                        if let Ok(score) = move_data.quiesce(
+                            stop_check,
+                            board,
+                            depth + 1,
+                            max_quiesce_depth,
+                            -beta,
+                            -alpha,
+                        ) {
+                            board.unmake_move(m);
+                            // debug_assert_eq!(self.board, &og_board);
+                            if score > bestscore {
+                                bestscore = score;
+                                if score > alpha {
+                                    alpha = score;
+                                }
+                            }
+                            if score >= beta {
+                                break; //the opponent already has a method to avoid us getting this score here, so we can stop looking
+                            }
+                        } else {
+                            board.unmake_move(m);
+                            return Err(());
+                        }
+                        // }
+                    }
+                }
+                bestscore
+            }
         };
         self.score = Some(ApproxScore { score });
         Ok(score)
@@ -280,17 +305,20 @@ impl BoardTree {
 
     fn best_move_at_depth(
         &mut self,
-        depth: usize,
+        max_depth: usize,
+        max_quiesce_depth: usize,
         stop_check: impl Fn() -> bool,
-    ) -> Result<Option<MoveIdx>, ()> {
+    ) -> Result<(Option<MoveIdx>, Score), ()> {
         let mut best_move_idx = None;
         let mut highest_score = Score::NegInf;
-        let n = self.root.moves.len();
+        let n = self.root.get_moves_data().len();
         for idx in 0..n {
             let move_idx = MoveIdx { idx };
-            let move_data = &mut self.root.moves[idx];
+            let move_data = &mut self.root.get_move_mut(move_idx);
             self.board.make_move(move_data.mv);
-            if let Ok(score) = move_data.compute_score(&stop_check, &mut self.board, depth) {
+            if let Ok(score) =
+                move_data.compute_score(&stop_check, &mut self.board, max_depth, max_quiesce_depth)
+            {
                 self.board.unmake_move(move_data.mv);
                 if score > highest_score {
                     highest_score = score;
@@ -300,8 +328,9 @@ impl BoardTree {
                 self.board.unmake_move(move_data.mv);
                 return Err(());
             }
+            println!("  {:?}/{:?}", idx + 1, n);
         }
-        Ok(best_move_idx)
+        Ok((best_move_idx, highest_score))
     }
 
     pub fn make_move(&mut self, m: MoveIdx) {
@@ -331,10 +360,10 @@ impl AiOn {
         let mut depth = 0;
         println!("start");
         loop {
-            println!("depth = {:?}", depth);
-            match tree.best_move_at_depth(depth, stop_check) {
-                Ok(best_move_answer) => {
+            match tree.best_move_at_depth(depth, depth * 3, stop_check) {
+                Ok((best_move_answer, score)) => {
                     *best_move.lock().unwrap() = best_move_answer;
+                    println!("done at depth = {:?} with score = {:?}", depth + 1, score);
                 }
                 Err(()) => {
                     break;
@@ -373,12 +402,7 @@ impl AiOff {
     }
 
     pub fn get_moves(&self) -> Vec<Move> {
-        self.tree
-            .root
-            .moves
-            .iter()
-            .map(|move_data| move_data.mv)
-            .collect()
+        self.tree.root.get_moves()
     }
 
     pub fn make_move(&mut self, m: MoveIdx) {

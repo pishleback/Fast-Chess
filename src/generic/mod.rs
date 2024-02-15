@@ -1,5 +1,6 @@
 pub mod ai;
-pub mod info;
+pub mod board_data;
+pub mod score;
 pub mod signature;
 
 use std::collections::{HashMap, HashSet};
@@ -15,6 +16,15 @@ pub enum Team {
     Black,
 }
 
+impl Team {
+    pub fn flip(&self) -> Self {
+        match self {
+            Team::White => Team::Black,
+            Team::Black => Team::White,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PieceKind {
     Pawn,
@@ -26,14 +36,14 @@ pub enum PieceKind {
 }
 
 impl PieceKind {
-    pub fn worth(&self) -> info::Score {
+    pub fn worth(&self) -> Option<i64>{
         match self {
-            PieceKind::Pawn => info::Score::Finite(1),
-            PieceKind::Rook => info::Score::Finite(5),
-            PieceKind::Knight => info::Score::Finite(3),
-            PieceKind::Bishop => info::Score::Finite(3),
-            PieceKind::Queen => info::Score::Finite(9),
-            PieceKind::King => info::Score::Finite(1000000000),
+            PieceKind::Pawn => Some(1),
+            PieceKind::Rook => Some(5),
+            PieceKind::Knight => Some(3),
+            PieceKind::Bishop => Some(3),
+            PieceKind::Queen => Some(9),
+            PieceKind::King => None,
         }
     }
 }
@@ -45,12 +55,35 @@ pub struct Piece {
     pub moved: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Move {
+    Move {
+        piece: Piece,
+        from_sq: Square,
+        to_sq: Square,
+    },
+    Capture {
+        piece: Piece,
+        victim: Piece,
+        from_sq: Square,
+        to_sq: Square,
+    },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MoveIdx {
+    pub idx: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct Board {
     turn: Team,
+    move_num : usize,
     signature: signature::Signature,
     white_pieces: HashMap<Square, Piece>,
     black_pieces: HashMap<Square, Piece>,
+    white_king: Square,
+    black_king: Square,
 }
 
 impl PartialEq for Board {
@@ -72,6 +105,9 @@ impl Board {
         let mut white_pieces = HashMap::new();
         let mut black_pieces = HashMap::new();
 
+        let mut white_king = None;
+        let mut black_king = None;
+
         for (sq, kind) in white_piece_kinds {
             white_pieces.insert(
                 sq,
@@ -81,6 +117,10 @@ impl Board {
                     moved: false,
                 },
             );
+            if kind == PieceKind::King {
+                assert!(white_king.is_none());
+                white_king = Some(sq);
+            }
         }
         for (sq, kind) in black_piece_kinds {
             black_pieces.insert(
@@ -91,13 +131,20 @@ impl Board {
                     moved: false,
                 },
             );
+            if kind == PieceKind::King {
+                assert!(black_king.is_none());
+                black_king = Some(sq);
+            }
         }
 
         let board = Self {
             turn,
+            move_num : 0,
             signature,
             white_pieces,
             black_pieces,
+            white_king: white_king.unwrap(),
+            black_king: black_king.unwrap(),
         };
 
         return board;
@@ -113,9 +160,9 @@ impl Board {
         }
     }
 
-    pub fn generate_info(&self) -> info::BoardInfo {
-        info::BoardInfo::new(self)
-    }
+    // pub fn generate_info(&self) -> score::BoardInfo {
+    //     score::BoardInfo::new(self)
+    // }
 
     pub fn get_turn(&self) -> Team {
         self.turn
@@ -132,6 +179,13 @@ impl Board {
         pieces
     }
 
+    fn get_king_square(&self, team: Team) -> Square {
+        match team {
+            Team::White => self.white_king,
+            Team::Black => self.black_king,
+        }
+    }
+
     fn good_pieces(&mut self) -> &mut HashMap<Square, Piece> {
         match self.turn {
             Team::White => &mut self.white_pieces,
@@ -146,9 +200,29 @@ impl Board {
         }
     }
 
-    pub fn make_move(&mut self, m: info::Move) {
+    fn check(&self) {
+        let mut white_king = None;
+        for (sq, piece) in &self.white_pieces {
+            if piece.kind == PieceKind::King {
+                assert!(white_king.is_none());
+                white_king = Some(sq);
+            }
+        }
+        assert_eq!(white_king.unwrap(), &self.white_king);
+
+        let mut black_king = None;
+        for (sq, piece) in &self.black_pieces {
+            if piece.kind == PieceKind::King {
+                assert!(black_king.is_none());
+                black_king = Some(sq);
+            }
+        }
+        assert_eq!(black_king.unwrap(), &self.black_king);
+    }
+
+    pub fn make_move(&mut self, m: Move) {
         match m {
-            info::Move::Move {
+            Move::Move {
                 piece,
                 from_sq,
                 to_sq,
@@ -158,8 +232,14 @@ impl Board {
                 debug_assert!(self.get_square(to_sq).is_none());
                 self.good_pieces().remove(&from_sq);
                 self.good_pieces().insert(to_sq, piece);
+                if piece.kind == PieceKind::King {
+                    match piece.team {
+                        Team::White => self.white_king = to_sq,
+                        Team::Black => self.black_king = to_sq,
+                    }
+                }
             }
-            info::Move::Capture {
+            Move::Capture {
                 piece,
                 victim,
                 from_sq,
@@ -172,23 +252,29 @@ impl Board {
                 self.good_pieces().remove(&from_sq);
                 self.bad_pieces().remove(&to_sq);
                 self.good_pieces().insert(to_sq, piece);
+                if piece.kind == PieceKind::King {
+                    match piece.team {
+                        Team::White => self.white_king = to_sq,
+                        Team::Black => self.black_king = to_sq,
+                    }
+                }
             }
         }
 
-        self.turn = match self.turn {
-            Team::White => Team::Black,
-            Team::Black => Team::White,
-        };
+        self.turn = self.turn.flip();
+        self.move_num += 1;
+
+        if cfg!(debug_assertions) {
+            self.check();
+        }
     }
 
-    pub fn unmake_move(&mut self, m: info::Move) {
-        self.turn = match self.turn {
-            Team::White => Team::Black,
-            Team::Black => Team::White,
-        };
+    pub fn unmake_move(&mut self, m: Move) {
+        self.move_num -= 1;
+        self.turn = self.turn.flip();
 
         match m {
-            info::Move::Move {
+            Move::Move {
                 piece,
                 from_sq,
                 to_sq,
@@ -198,8 +284,14 @@ impl Board {
                 debug_assert!(self.get_square(from_sq).is_none());
                 self.good_pieces().remove(&to_sq);
                 self.good_pieces().insert(from_sq, piece);
+                if piece.kind == PieceKind::King {
+                    match piece.team {
+                        Team::White => self.white_king = from_sq,
+                        Team::Black => self.black_king = from_sq,
+                    }
+                }
             }
-            info::Move::Capture {
+            Move::Capture {
                 piece,
                 victim,
                 from_sq,
@@ -212,7 +304,17 @@ impl Board {
                 self.good_pieces().remove(&to_sq);
                 self.bad_pieces().insert(to_sq, victim);
                 self.good_pieces().insert(from_sq, piece);
+                if piece.kind == PieceKind::King {
+                    match piece.team {
+                        Team::White => self.white_king = from_sq,
+                        Team::Black => self.black_king = from_sq,
+                    }
+                }
             }
+        }
+
+        if cfg!(debug_assertions) {
+            self.check();
         }
     }
 }
