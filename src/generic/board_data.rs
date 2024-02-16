@@ -3,27 +3,17 @@ use super::score::*;
 use super::*;
 
 #[derive(Debug, Clone)]
-enum VisionFrom {
+enum Vision {
     Teleport {
         piece: Piece,
         from: Square,
     },
     Slide {
         piece: Piece,
+        from: Square,
         slide: Vec<Square>,
         slide_idx: usize,
     },
-}
-#[derive(Debug, Clone)]
-enum VisionTo {
-    Visible,
-    Defend { piece: Piece },
-    Attack { piece: Piece },
-}
-#[derive(Debug, Clone)]
-struct Vision {
-    from: VisionFrom,
-    to: VisionTo,
 }
 
 #[derive(Debug, Clone)]
@@ -83,18 +73,16 @@ impl PseudoMoves {
                         None => {
                             add_vision!(
                                 to_sq,
-                                Vision {
-                                    from: VisionFrom::Teleport {
-                                        piece: *$piece,
-                                        from: *$from_sq,
-                                    },
-                                    to: VisionTo::Visible,
+                                Vision::Teleport {
+                                    piece: *$piece,
+                                    from: *$from_sq,
                                 },
                                 $piece.team
                             );
                             add_move!(
-                                Move::Move {
+                                Move::Standard {
                                     piece: *$piece,
+                                    victim: None,
                                     from_sq: *$from_sq,
                                     to_sq: *to_sq,
                                 },
@@ -105,20 +93,17 @@ impl PseudoMoves {
                             if blocking.team != $piece.team {
                                 add_vision!(
                                     to_sq,
-                                    Vision {
-                                        from: VisionFrom::Teleport {
-                                            piece: *$piece,
-                                            from: *$from_sq,
-                                        },
-                                        to: VisionTo::Attack { piece: blocking },
+                                    Vision::Teleport {
+                                        piece: *$piece,
+                                        from: *$from_sq,
                                     },
                                     $piece.team
                                 );
                                 if blocking.kind != PieceKind::King {
                                     add_move!(
-                                        Move::Capture {
+                                        Move::Standard {
                                             piece: *$piece,
-                                            victim: blocking,
+                                            victim: Some(blocking),
                                             from_sq: *$from_sq,
                                             to_sq: *to_sq,
                                         },
@@ -128,12 +113,9 @@ impl PseudoMoves {
                             } else {
                                 add_vision!(
                                     to_sq,
-                                    Vision {
-                                        from: VisionFrom::Teleport {
-                                            piece: *$piece,
-                                            from: *$from_sq,
-                                        },
-                                        to: VisionTo::Defend { piece: blocking },
+                                    Vision::Teleport {
+                                        piece: *$piece,
+                                        from: *$from_sq,
                                     },
                                     $piece.team
                                 );
@@ -158,19 +140,18 @@ impl PseudoMoves {
                                         done.insert(to_sq);
                                         add_vision!(
                                             to_sq,
-                                            Vision {
-                                                from: VisionFrom::Slide {
-                                                    piece: $piece,
-                                                    slide: slide.clone(),
-                                                    slide_idx: slide_idx,
-                                                },
-                                                to: VisionTo::Visible,
+                                            Vision::Slide {
+                                                piece: $piece,
+                                                from: $from_sq,
+                                                slide: slide.clone(),
+                                                slide_idx: slide_idx,
                                             },
                                             $piece.team
                                         );
                                         add_move!(
-                                            Move::Move {
+                                            Move::Standard {
                                                 piece: $piece,
+                                                victim: None,
                                                 from_sq: $from_sq,
                                                 to_sq: to_sq,
                                             },
@@ -184,21 +165,19 @@ impl PseudoMoves {
                                         if blocking.team != $piece.team {
                                             add_vision!(
                                                 to_sq,
-                                                Vision {
-                                                    from: VisionFrom::Slide {
-                                                        piece: $piece,
-                                                        slide: slide,
-                                                        slide_idx: slide_idx,
-                                                    },
-                                                    to: VisionTo::Attack { piece: blocking },
+                                                Vision::Slide {
+                                                    piece: $piece,
+                                                    from: $from_sq,
+                                                    slide: slide,
+                                                    slide_idx: slide_idx,
                                                 },
                                                 $piece.team
                                             );
                                             if blocking.kind != PieceKind::King {
                                                 add_move!(
-                                                    Move::Capture {
+                                                    Move::Standard {
                                                         piece: $piece,
-                                                        victim: blocking,
+                                                        victim: Some(blocking),
                                                         from_sq: $from_sq,
                                                         to_sq: to_sq,
                                                     },
@@ -208,13 +187,11 @@ impl PseudoMoves {
                                         } else {
                                             add_vision!(
                                                 to_sq,
-                                                Vision {
-                                                    from: VisionFrom::Slide {
-                                                        piece: $piece,
-                                                        slide: slide,
-                                                        slide_idx: slide_idx,
-                                                    },
-                                                    to: VisionTo::Defend { piece: blocking },
+                                                Vision::Slide {
+                                                    piece: $piece,
+                                                    from: $from_sq,
+                                                    slide: slide,
+                                                    slide_idx: slide_idx,
                                                 },
                                                 $piece.team
                                             );
@@ -245,8 +222,9 @@ impl PseudoMoves {
                         let (first, seconds) = pm;
                         if board.get_square(*first).is_none() {
                             add_move!(
-                                Move::Move {
+                                Move::Standard {
                                     piece: *piece,
+                                    victim: None,
                                     from_sq: *from_sq,
                                     to_sq: *first,
                                 },
@@ -255,8 +233,9 @@ impl PseudoMoves {
                             for second in seconds {
                                 if board.get_square(*second).is_none() {
                                     add_move!(
-                                        Move::Move {
+                                        Move::Standard {
                                             piece: *piece,
+                                            victim: None,
                                             from_sq: *from_sq,
                                             to_sq: *second,
                                         },
@@ -272,12 +251,9 @@ impl PseudoMoves {
                             None => {
                                 add_vision!(
                                     to_sq,
-                                    Vision {
-                                        from: VisionFrom::Teleport {
-                                            piece: *piece,
-                                            from: *from_sq,
-                                        },
-                                        to: VisionTo::Visible,
+                                    Vision::Teleport {
+                                        piece: *piece,
+                                        from: *from_sq,
                                     },
                                     piece.team
                                 );
@@ -286,20 +262,17 @@ impl PseudoMoves {
                                 if diag.team != piece.team {
                                     add_vision!(
                                         to_sq,
-                                        Vision {
-                                            from: VisionFrom::Teleport {
-                                                piece: *piece,
-                                                from: *from_sq,
-                                            },
-                                            to: VisionTo::Attack { piece: diag },
+                                        Vision::Teleport {
+                                            piece: *piece,
+                                            from: *from_sq,
                                         },
                                         piece.team
                                     );
                                     if diag.kind != PieceKind::King {
                                         add_move!(
-                                            Move::Capture {
+                                            Move::Standard {
                                                 piece: *piece,
-                                                victim: diag,
+                                                victim: Some(diag),
                                                 from_sq: *from_sq,
                                                 to_sq: *to_sq,
                                             },
@@ -309,12 +282,9 @@ impl PseudoMoves {
                                 } else {
                                     add_vision!(
                                         to_sq,
-                                        Vision {
-                                            from: VisionFrom::Teleport {
-                                                piece: *piece,
-                                                from: *from_sq,
-                                            },
-                                            to: VisionTo::Defend { piece: diag },
+                                        Vision::Teleport {
+                                            piece: *piece,
+                                            from: *from_sq,
                                         },
                                         piece.team
                                     );
@@ -374,49 +344,199 @@ pub struct BoardData {
 }
 
 impl BoardData {
-    pub fn new(board: &Board) -> Self {
+    pub fn new(board: &mut Board) -> Self {
         let turn = board.get_turn();
 
         let pseudomoves = PseudoMoves::new(board);
 
-        let is_check = pseudomoves
-            .get_vision(turn.flip(), board.get_king_square(turn))
-            .iter()
-            .any(|vis| match vis.to {
-                VisionTo::Visible => panic!(),
-                VisionTo::Defend { piece } => panic!(),
-                VisionTo::Attack { piece } => true,
-            });
+        let checkers = pseudomoves.get_vision(turn.flip(), board.get_king_square(turn));
+        let is_check = !checkers.is_empty();
 
-        let mut moves: Vec<Move> = vec![];
-        for pseudo_move in match turn {
-            Team::White => pseudomoves.white_pseudomoves,
-            Team::Black => pseudomoves.black_pseudomoves,
-        } {
-            //check if the pseudo_move is legal
+        let is_illegal = |board: &mut Board, pseudo_move: Move| -> bool {
+            //pseudo_move is legal iff our king is not under attack after making pseudo_move
+            match pseudo_move {
+                Move::Standard {
+                    piece,
+                    victim: victim_opt,
+                    from_sq,
+                    to_sq,
+                } => {
+                    if piece.kind == PieceKind::King {
+                        let to_visions = pseudomoves.get_vision(turn.flip(), to_sq);
+                        if !to_visions.is_empty() {
+                            return true; //illegal move because we are moving into check
+                        }
+                        if is_check {
+                            //moving the king and currently in check
+                            //need to check whether we are moving into a check obscured by ourself
+                            let from_visions = pseudomoves.get_vision(turn.flip(), from_sq);
+                            for from_vision in from_visions {
+                                match from_vision {
+                                    Vision::Teleport { piece, from } => {}
+                                    Vision::Slide {
+                                        piece,
+                                        from,
+                                        slide,
+                                        slide_idx,
+                                    } => {
+                                        if *slide_idx < slide.len() - 1 {
+                                            let danger_sq = slide[slide_idx + 1];
+                                            if to_sq == danger_sq {
+                                                return true; //illegal move because we are moving into a check which was obscured by ourself
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            return false;
+                        } else {
+                            return false; //moving to a non-checked square is always legal
+                        }
+                    } else {
+                        //find all pieces we are pinned by
+                        let mut pinners = vec![];
+                        board.make_move(pseudo_move);
+                        for pinner_vis in pseudomoves.get_vision(turn.flip(), from_sq) {
+                            match pinner_vis {
+                                Vision::Teleport { piece, from } => {}
+                                Vision::Slide {
+                                    piece: pinner_piece,
+                                    from: pinner_from,
+                                    slide: pinner_slide,
+                                    slide_idx: pinner_slide_idx,
+                                } => {
+                                    'PIN_LOOP: for danger_sq in pinner_slide {
+                                        //compute whether we are in check after making pseudomove
+                                        match board.get_square(*danger_sq) {
+                                            Some(Piece { kind, team, .. }) => {
+                                                if kind == PieceKind::King && team == turn {
+                                                    pinners.push(pinner_vis);
+                                                }
+                                                break 'PIN_LOOP;
+                                            }
+                                            None => {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        board.unmake_move();
+                        match pinners.len() {
+                            0 => {
+                                //not pinned
+                            }
+                            1 => {
+                                //pinned by one piece. Legal iff we are taking it
+                                match pinners[0] {
+                                    Vision::Teleport { piece, from } => panic!(),
+                                    Vision::Slide {
+                                        piece: pinner_piece,
+                                        from: pinner_from,
+                                        slide: pinner_slide,
+                                        slide_idx: pinner_slide_idx,
+                                    } => {
+                                        if to_sq == *pinner_from {
+                                            debug_assert_eq!(victim_opt.unwrap(), *pinner_piece);
+                                        } else {
+                                            return true; //we are not taking the pinner piece, so this move is illegal
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {
+                                //pinned by two or more pieces. Never legal to move
+                                return true;
+                            }
+                        }
 
-            // TODO: more efficient valid move algorithm
-            // if cfg!(debug_assertions) {}
-
-            let mut check = false;
-            let mut test_board = board.clone();
-            test_board.make_move(pseudo_move);
-            let test_board_pseudomoves = PseudoMoves::new(&test_board);
-            let king_square = test_board.get_king_square(turn);
-            for vis in test_board_pseudomoves.get_vision(turn.flip(), king_square) {
-                match &vis.to {
-                    VisionTo::Visible => panic!(),
-                    VisionTo::Defend { piece } => panic!(),
-
-                    VisionTo::Attack { piece } => {
-                        check = true;
+                        //from here onwards we are not pinned
+                        if is_check {
+                            debug_assert!(checkers.len() >= 1);
+                            if checkers.len() == 1 {
+                                let unique_sliding_checker = &checkers[0];
+                                match victim_opt {
+                                    Some(victim) => {
+                                        let (checking_piece, checking_from) =
+                                            match unique_sliding_checker {
+                                                Vision::Teleport {
+                                                    piece: checking_piece,
+                                                    from: checking_from,
+                                                } => (checking_piece, checking_from),
+                                                Vision::Slide {
+                                                    piece: checking_piece,
+                                                    from: checking_from,
+                                                    slide: checking_slide,
+                                                    slide_idx: checking_slide_idx,
+                                                } => (checking_piece, checking_from),
+                                            };
+                                        if to_sq == *checking_from {
+                                            debug_assert_eq!(victim, *checking_piece);
+                                            return false; //taking a unique checking piece is legal
+                                        }
+                                    }
+                                    None => {}
+                                }
+                            }
+                            //we are in check and taking any checking pieces is not legal
+                            for checker in checkers {
+                                match checker {
+                                    Vision::Teleport { .. } => {
+                                        return true; //in check by a teleporter, not moving the king, and not taking the checker is not legal
+                                    }
+                                    Vision::Slide { .. } => {}
+                                }
+                            }
+                            //we are in check only by sliders and taking a checking slider is not legal
+                            if checkers.iter().all(|checker| match checker {
+                                Vision::Teleport { .. } => panic!(),
+                                Vision::Slide {
+                                    piece: checking_piece,
+                                    from: checking_from,
+                                    slide: checking_slide,
+                                    slide_idx: checking_slide_idx,
+                                } => (0..*checking_slide_idx)
+                                    .map(|block_idx| checking_slide[block_idx])
+                                    .any(|block_sq| block_sq == to_sq),
+                            }) {
+                                //the move blocks all checking sliders so is legal
+                                false
+                            } else {
+                                //the move failed to block all checking sliders so is illegal
+                                true
+                            }
+                        } else {
+                            return false; //not pinned and not in check is a legal move
+                        }
                     }
                 }
             }
-            test_board.unmake_move(pseudo_move);
+        };
 
-            if !check {
-                moves.push(pseudo_move);
+        let mut moves: Vec<Move> = vec![];
+        for pseudo_move in pseudomoves.get_pseudomoves(turn) {
+            //compute whether pseudo_move is legal is not
+            let illegal = is_illegal(board, *pseudo_move);
+
+            if cfg!(debug_assertions) {
+                //check that the fast check calculation is valid
+                let mut test_board = board.clone();
+                test_board.make_move(*pseudo_move);
+                let test_board_pseudomoves = PseudoMoves::new(&test_board);
+                let king_square = test_board.get_king_square(turn);
+                let test_illegal = !test_board_pseudomoves
+                    .get_vision(turn.flip(), king_square)
+                    .is_empty();
+                test_board.unmake_move();
+                if test_illegal != illegal {
+                    println!("NUM = {:?}", board.get_move_num());
+                    println!("MOVES = {:#?}", board.moves);
+                    println!("DODGY MOVE = {:?}", pseudo_move);
+                }
+                assert_eq!(test_illegal, illegal);
+            }
+
+            if !illegal {
+                moves.push(*pseudo_move);
             }
         }
 
@@ -432,9 +552,9 @@ impl BoardData {
         let score = {
             if moves.is_empty() {
                 if is_check {
-                    Score::Lost(board.move_num) //in check with no legal moves -> loose
+                    Score::Lost(board.get_move_num()) //in check with no legal moves -> loose
                 } else {
-                    Score::Draw(board.move_num) //not in check with no legal moves -> draw
+                    Score::Draw(board.get_move_num()) //not in check with no legal moves -> draw
                 }
             } else {
                 let mut score = 0;
@@ -458,40 +578,42 @@ impl BoardData {
                 {
                     let sq = Square { idx: sq_idx };
                     for vision in visions {
-                        let from_piece;
-                        match &vision.from {
-                            VisionFrom::Teleport { piece, from } => {
-                                from_piece = piece;
-                            }
-                            VisionFrom::Slide {
+                        let from_piece = match &vision {
+                            Vision::Teleport { piece, from } => piece,
+                            Vision::Slide {
                                 piece,
+                                from,
                                 slide,
                                 slide_idx,
-                            } => {
-                                from_piece = piece;
+                            } => piece,
+                        };
+                        match board.get_square(sq) {
+                            Some(to_piece) => {
+                                if to_piece.team == from_piece.team {
+                                    //defend
+                                    if to_piece.kind != PieceKind::King
+                                        && from_piece.kind != PieceKind::King
+                                    {
+                                        let from_worth = from_piece.kind.worth().unwrap();
+                                        let to_worth = to_piece.kind.worth().unwrap();
+                                        if to_worth == from_worth {
+                                            score += signed_score!(team, 5);
+                                        }
+                                    }
+                                } else {
+                                    //attack
+                                    if to_piece.kind != PieceKind::King
+                                        && from_piece.kind != PieceKind::King
+                                    {
+                                        let from_worth = from_piece.kind.worth().unwrap();
+                                        let to_worth = to_piece.kind.worth().unwrap();
+                                        score += signed_score!(team, to_worth * 10);
+                                    }
+                                }
                             }
-                        }
-                        match &vision.to {
-                            VisionTo::Visible => {
+                            None => {
+                                //visible
                                 score += signed_score!(team, 1);
-                            }
-                            VisionTo::Defend { piece } => {
-                                if piece.kind != PieceKind::King
-                                    && from_piece.kind != PieceKind::King
-                                {
-                                    let from_worth = from_piece.kind.worth().unwrap();
-                                    let to_worth = piece.kind.worth().unwrap();
-                                    score += signed_score!(team, (10 - from_worth) * 20);
-                                }
-                            }
-                            VisionTo::Attack { piece } => {
-                                if piece.kind != PieceKind::King
-                                    && from_piece.kind != PieceKind::King
-                                {
-                                    let from_worth = from_piece.kind.worth().unwrap();
-                                    let to_worth = piece.kind.worth().unwrap();
-                                    score += signed_score!(team, (10 - from_worth) * 30);
-                                }
                             }
                         }
                     }

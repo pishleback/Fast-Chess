@@ -55,6 +55,15 @@ impl Neg for Score {
     }
 }
 
+impl Score {
+    pub fn add_heuristic(self, offset: i64) -> Self {
+        match self {
+            Score::Heuristic(v) => Score::Heuristic(v + offset),
+            _ => self,
+        }
+    }
+}
+
 // #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // pub enum Score {
 //     Finite(i64),

@@ -36,7 +36,7 @@ pub enum PieceKind {
 }
 
 impl PieceKind {
-    pub fn worth(&self) -> Option<i64>{
+    pub fn worth(&self) -> Option<i64> {
         match self {
             PieceKind::Pawn => Some(1),
             PieceKind::Rook => Some(5),
@@ -55,16 +55,11 @@ pub struct Piece {
     pub moved: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Move {
-    Move {
+    Standard {
         piece: Piece,
-        from_sq: Square,
-        to_sq: Square,
-    },
-    Capture {
-        piece: Piece,
-        victim: Piece,
+        victim: Option<Piece>,
         from_sq: Square,
         to_sq: Square,
     },
@@ -78,7 +73,7 @@ pub struct MoveIdx {
 #[derive(Debug, Clone)]
 pub struct Board {
     turn: Team,
-    move_num : usize,
+    moves: Vec<Move>,
     signature: signature::Signature,
     white_pieces: HashMap<Square, Piece>,
     black_pieces: HashMap<Square, Piece>,
@@ -139,7 +134,7 @@ impl Board {
 
         let board = Self {
             turn,
-            move_num : 0,
+            moves: vec![],
             signature,
             white_pieces,
             black_pieces,
@@ -148,6 +143,10 @@ impl Board {
         };
 
         return board;
+    }
+
+    pub fn get_move_num(&self) -> usize {
+        self.moves.len()
     }
 
     pub fn get_square(&self, sq: Square) -> Option<Piece> {
@@ -222,8 +221,9 @@ impl Board {
 
     pub fn make_move(&mut self, m: Move) {
         match m {
-            Move::Move {
+            Move::Standard {
                 piece,
+                victim: None,
                 from_sq,
                 to_sq,
             } => {
@@ -239,9 +239,9 @@ impl Board {
                     }
                 }
             }
-            Move::Capture {
+            Move::Standard {
                 piece,
-                victim,
+                victim: Some(victim),
                 from_sq,
                 to_sq,
             } => {
@@ -262,20 +262,21 @@ impl Board {
         }
 
         self.turn = self.turn.flip();
-        self.move_num += 1;
+        self.moves.push(m);
 
         if cfg!(debug_assertions) {
             self.check();
         }
     }
 
-    pub fn unmake_move(&mut self, m: Move) {
-        self.move_num -= 1;
+    pub fn unmake_move(&mut self) {
+        let m = self.moves.pop().unwrap();
         self.turn = self.turn.flip();
 
         match m {
-            Move::Move {
+            Move::Standard {
                 piece,
+                victim: None,
                 from_sq,
                 to_sq,
             } => {
@@ -291,9 +292,9 @@ impl Board {
                     }
                 }
             }
-            Move::Capture {
+            Move::Standard {
                 piece,
-                victim,
+                victim: Some(victim),
                 from_sq,
                 to_sq,
             } => {

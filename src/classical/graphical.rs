@@ -514,14 +514,15 @@ impl Canvas for GameInterface {
                 Some(m_idx) => {
                     let m = self.moves[m_idx.idx];
                     let squares = match m {
-                        Move::Move {
+                        Move::Standard {
                             piece,
+                            victim: None,
                             from_sq,
                             to_sq,
                         } => vec![from_sq, to_sq],
-                        Move::Capture {
+                        Move::Standard {
                             piece,
-                            victim,
+                            victim: Some(victim),
                             from_sq,
                             to_sq,
                         } => vec![from_sq, to_sq],
@@ -629,8 +630,9 @@ impl GameInterface {
                     .map(|(idx, m)| (MoveIdx { idx }, *m))
                 {
                     match m {
-                        Move::Move {
+                        Move::Standard {
                             piece,
+                            victim: None,
                             from_sq,
                             to_sq,
                         } => {
@@ -642,9 +644,9 @@ impl GameInterface {
                                 });
                             }
                         }
-                        Move::Capture {
+                        Move::Standard {
                             piece,
-                            victim,
+                            victim: Some(victim),
                             from_sq,
                             to_sq,
                         } => {
