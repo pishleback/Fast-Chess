@@ -88,7 +88,7 @@ impl MoveData {
         //beta is the score the opponent knows they can achive
         let board_data = self.get_board(board);
         if board_data.is_terminal() {
-            return Ok(-board_data.get_evaluation());
+            return Ok(board_data.get_evaluation());
         }
 
         let score = -{
@@ -191,34 +191,35 @@ impl MoveData {
                     } {
                         if standpat.add_heuristic(material_gain + 200) < alpha {
                             //delta prune
-                            // println!("delta prune {:?}", depth);
-                        } else {
-                            // let og_board = self.board.clone();
-                            board.make_move(m);
-                            if let Ok(score) = move_data.quiesce(
-                                stop_check,
-                                board,
-                                depth + 1,
-                                max_quiesce_depth,
-                                -beta,
-                                -alpha,
-                            ) {
-                                board.unmake_move();
-                                // debug_assert_eq!(self.board, &og_board);
-                                if score > bestscore {
-                                    bestscore = score;
-                                    if score > alpha {
-                                        alpha = score;
-                                    }
-                                }
-                                if score >= beta {
-                                    break; //the opponent already has a method to avoid us getting this score here, so we can stop looking
-                                }
-                            } else {
-                                board.unmake_move();
-                                return Err(());
-                            }
+                            // println!("delta prune {:?}", deep);
+                            continue;
                         }
+                        // let og_board = self.board.clone();
+                        board.make_move(m);
+                        if let Ok(score) = move_data.quiesce(
+                            stop_check,
+                            board,
+                            depth + 1,
+                            max_quiesce_depth,
+                            -beta,
+                            -alpha,
+                        ) {
+                            board.unmake_move();
+                            // debug_assert_eq!(self.board, &og_board);
+                            if score > bestscore {
+                                bestscore = score;
+                                if score > alpha {
+                                    alpha = score;
+                                }
+                            }
+                            if score >= beta {
+                                break; //the opponent already has a method to avoid us getting this score here, so we can stop looking
+                            }
+                        } else {
+                            board.unmake_move();
+                            return Err(());
+                        }
+                        // }
                     }
                 }
                 bestscore
@@ -338,11 +339,11 @@ impl BoardTree {
     }
 
     pub fn make_move(&mut self, m: MoveIdx) {
-        let md = self.root.get_move(m);
+        let md = self.root.get_move_mut(m);
         self.board.make_move(md.mv);
         self.root = match &md.board {
             Some(board) => board.clone(),
-            None => BoardData::new(&mut self.board),
+            None => md.get_board(&mut self.board).clone(),
         }
     }
 }
@@ -364,7 +365,7 @@ impl AiOn {
         let mut depth = 1;
         println!("start");
         loop {
-            match tree.best_move_at_depth(depth - 1, depth * 5 - 1, stop_check) {
+            match tree.best_move_at_depth(depth - 1, depth * 2 - 1, stop_check) {
                 Ok((best_move_answer, score)) => {
                     *best_move.lock().unwrap() = best_move_answer;
                     println!("done at depth = {:?} with score = {:?}", depth, score);

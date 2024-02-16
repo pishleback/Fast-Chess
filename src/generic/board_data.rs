@@ -41,9 +41,9 @@ impl PseudoMoves {
 
     fn new(board: &Board) -> Self {
         let mut white_vision: Vec<Vec<Vision>> =
-            (0..board.signature.num()).map(|i| vec![]).collect();
+            (0..board.signature.num()).map(|_i| vec![]).collect();
         let mut black_vision: Vec<Vec<Vision>> =
-            (0..board.signature.num()).map(|i| vec![]).collect();
+            (0..board.signature.num()).map(|_i| vec![]).collect();
 
         let mut white_pseudomoves = vec![];
         let mut black_pseudomoves = vec![];
@@ -66,6 +66,39 @@ impl PseudoMoves {
             };
         }
 
+        macro_rules! add_pawn_move {
+            ($piece:expr, $victim:expr, $from_sq:expr, $to_sq:expr) => {
+                match board.signature.get_pawn_promotions($to_sq, $piece.team) {
+                    None => {
+                        add_move!(
+                            Move::Standard {
+                                piece: $piece,
+                                victim: $victim,
+                                promotion: None,
+                                from_sq: $from_sq,
+                                to_sq: $to_sq
+                            },
+                            $piece.team
+                        )
+                    }
+                    Some(promotions) => {
+                        for kind in promotions {
+                            add_move!(
+                                Move::Standard {
+                                    piece: $piece,
+                                    victim: $victim,
+                                    promotion: Some(*kind),
+                                    from_sq: $from_sq,
+                                    to_sq: $to_sq
+                                },
+                                $piece.team
+                            )
+                        }
+                    }
+                }
+            };
+        }
+
         macro_rules! add_teleports {
             ($teles:expr, $piece:expr, $from_sq:expr) => {{
                 for to_sq in $teles {
@@ -83,6 +116,7 @@ impl PseudoMoves {
                                 Move::Standard {
                                     piece: *$piece,
                                     victim: None,
+                                    promotion: None,
                                     from_sq: *$from_sq,
                                     to_sq: *to_sq,
                                 },
@@ -104,6 +138,7 @@ impl PseudoMoves {
                                         Move::Standard {
                                             piece: *$piece,
                                             victim: Some(blocking),
+                                            promotion: None,
                                             from_sq: *$from_sq,
                                             to_sq: *to_sq,
                                         },
@@ -152,6 +187,7 @@ impl PseudoMoves {
                                             Move::Standard {
                                                 piece: $piece,
                                                 victim: None,
+                                                promotion: None,
                                                 from_sq: $from_sq,
                                                 to_sq: to_sq,
                                             },
@@ -178,6 +214,7 @@ impl PseudoMoves {
                                                     Move::Standard {
                                                         piece: $piece,
                                                         victim: Some(blocking),
+                                                        promotion: None,
                                                         from_sq: $from_sq,
                                                         to_sq: to_sq,
                                                     },
@@ -221,26 +258,10 @@ impl PseudoMoves {
                     for pm in board.signature.get_pawn_moves(*from_sq, piece.team) {
                         let (first, seconds) = pm;
                         if board.get_square(*first).is_none() {
-                            add_move!(
-                                Move::Standard {
-                                    piece: *piece,
-                                    victim: None,
-                                    from_sq: *from_sq,
-                                    to_sq: *first,
-                                },
-                                piece.team
-                            );
+                            add_pawn_move!(*piece, None, *from_sq, *first);
                             for second in seconds {
                                 if board.get_square(*second).is_none() {
-                                    add_move!(
-                                        Move::Standard {
-                                            piece: *piece,
-                                            victim: None,
-                                            from_sq: *from_sq,
-                                            to_sq: *second,
-                                        },
-                                        piece.team
-                                    );
+                                    add_pawn_move!(*piece, None, *from_sq, *second);
                                 }
                             }
                         }
@@ -269,15 +290,7 @@ impl PseudoMoves {
                                         piece.team
                                     );
                                     if diag.kind != PieceKind::King {
-                                        add_move!(
-                                            Move::Standard {
-                                                piece: *piece,
-                                                victim: Some(diag),
-                                                from_sq: *from_sq,
-                                                to_sq: *to_sq,
-                                            },
-                                            piece.team
-                                        );
+                                        add_pawn_move!(*piece, Some(diag), *from_sq, *to_sq);
                                     }
                                 } else {
                                     add_vision!(
@@ -358,6 +371,7 @@ impl BoardData {
                 Move::Standard {
                     piece,
                     victim: victim_opt,
+                    promotion,
                     from_sq,
                     to_sq,
                 } => {
@@ -562,6 +576,27 @@ impl BoardData {
                     if piece.kind != PieceKind::King {
                         score += signed_score!(piece.team, piece.kind.worth().unwrap() * 1000);
                     }
+                    if piece.kind == PieceKind::Pawn {
+                        match board.signature.get_pawn_promotion_distance(*sq, piece.team) {
+                            Some(1) => {
+                                score += signed_score!(piece.team, 2000);
+                            }
+                            Some(2) => {
+                                score += signed_score!(piece.team, 100);
+                            }
+                            Some(3) => {
+                                score += signed_score!(piece.team, 10);
+                            }
+                            Some(4) => {
+                                score += signed_score!(piece.team, 5);
+                            }
+                            Some(5) => {
+                                score += signed_score!(piece.team, 1);
+                            }
+                            Some(_) => {}
+                            None => {}
+                        }
+                    }
                 }
                 for (sq_idx, visions, team) in pseudomoves
                     .white_vision
@@ -596,19 +631,19 @@ impl BoardData {
                                     {
                                         let from_worth = from_piece.kind.worth().unwrap();
                                         let to_worth = to_piece.kind.worth().unwrap();
-                                        if to_worth == from_worth {
-                                            score += signed_score!(team, 5);
+                                        if to_worth <= from_worth {
+                                            score += signed_score!(team, 3);
                                         }
                                     }
                                 } else {
-                                    //attack
-                                    if to_piece.kind != PieceKind::King
-                                        && from_piece.kind != PieceKind::King
-                                    {
-                                        let from_worth = from_piece.kind.worth().unwrap();
-                                        let to_worth = to_piece.kind.worth().unwrap();
-                                        score += signed_score!(team, to_worth * 10);
-                                    }
+                                    // //attack
+                                    // if to_piece.kind != PieceKind::King
+                                    //     && from_piece.kind != PieceKind::King
+                                    // {
+                                    //     let from_worth = from_piece.kind.worth().unwrap();
+                                    //     let to_worth = to_piece.kind.worth().unwrap();
+                                    //     score += signed_score!(team, to_worth * 10);
+                                    // }
                                 }
                             }
                             None => {
@@ -634,6 +669,10 @@ impl BoardData {
 
     pub fn is_terminal(&self) -> bool {
         self.moves.is_empty()
+    }
+
+    pub fn is_check(&self) -> bool {
+        self.is_check
     }
 
     pub fn get_evaluation(&self) -> Score {

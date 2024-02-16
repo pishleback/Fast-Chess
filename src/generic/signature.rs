@@ -12,11 +12,29 @@ pub struct Signature {
     black_pawn_moves: Vec<Vec<(Square, Vec<Square>)>>,
     white_pawn_takes: Vec<Vec<Square>>,
     black_pawn_takes: Vec<Vec<Square>>,
+    white_pawn_promotions: Vec<Option<Vec<PieceKind>>>,
+    black_pawn_promotions: Vec<Option<Vec<PieceKind>>>,
+    white_pawn_promotion_distance: Vec<Option<usize>>,
+    black_pawn_promotion_distance: Vec<Option<usize>>,
 }
 
 impl Signature {
     pub fn num(&self) -> usize {
         self.num
+    }
+
+    pub fn get_pawn_promotion_distance(&self, sq: Square, team: Team) -> Option<usize> {
+        match team {
+            Team::White => self.white_pawn_promotion_distance[sq.idx],
+            Team::Black => self.black_pawn_promotion_distance[sq.idx],
+        }
+    }
+
+    pub fn get_pawn_promotions(&self, sq: Square, team: Team) -> &Option<Vec<PieceKind>> {
+        match team {
+            Team::White => &self.white_pawn_promotions[sq.idx],
+            Team::Black => &self.black_pawn_promotions[sq.idx],
+        }
     }
 
     pub fn get_pawn_moves(&self, sq: Square, team: Team) -> &Vec<(Square, Vec<Square>)> {
@@ -63,6 +81,8 @@ impl Signature {
         flat_opp: &dyn Fn(Square, Square) -> Vec<Square>,
         diag_opp: &dyn Fn(Square, Square) -> Vec<Square>,
         pawn_moves: &dyn Fn(Team, Square) -> Vec<(Square, Vec<Square>)>,
+        white_pawn_promotions: HashMap<Square, Vec<PieceKind>>,
+        black_pawn_promotions: HashMap<Square, Vec<PieceKind>>,
     ) -> Self {
         //given a flat move from i to j, what are the possible following orthogonal flat moves
         let flat_nopp = |i: Square, j: Square| -> Vec<Square> {
@@ -196,6 +216,67 @@ impl Signature {
             sqs
         };
 
+        let compute_pawn_promotion_distance = |pawn_moves: HashMap<Square, Vec<Square>>,
+                                               promotion_squares: HashSet<Square>|
+         -> Vec<Option<usize>> {
+            (0..num)
+                .map(|idx| Square { idx })
+                .map(|sq| {
+                    let mut frontier = HashSet::from([sq]);
+                    let mut distance = 0;
+                    while !frontier
+                        .iter()
+                        .any(|frontier_sq| promotion_squares.contains(frontier_sq))
+                    {
+                        if frontier.is_empty() {
+                            return None;
+                        }
+                        let mut new_frontier = HashSet::new();
+                        for frontier_sq in frontier {
+                            println!("{:?} {:?}", frontier_sq, pawn_moves.get(&frontier_sq));
+                            for new_frontier_sq in pawn_moves.get(&frontier_sq).unwrap() {
+                                new_frontier.insert(*new_frontier_sq);
+                            }
+                        }
+                        frontier = new_frontier;
+                        distance += 1;
+                    }
+                    Some(distance)
+                })
+                .collect()
+        };
+
+        let white_pawn_promotion_distance = compute_pawn_promotion_distance(
+            (0..num)
+                .map(|idx| Square { idx })
+                .map(|sq| {
+                    (sq, {
+                        pawn_moves(Team::White, sq)
+                            .into_iter()
+                            .map(|(first, seconds)| first)
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect(),
+            white_pawn_promotions.keys().cloned().collect(),
+        );
+        let black_pawn_promotion_distance = compute_pawn_promotion_distance(
+            (0..num)
+                .map(|idx| Square { idx })
+                .map(|sq| {
+                    (sq, {
+                        pawn_moves(Team::Black, sq)
+                            .into_iter()
+                            .map(|(first, seconds)| first)
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect(),
+            black_pawn_promotions.keys().cloned().collect(),
+        );
+
+        println!("{:?}", black_pawn_promotion_distance);
+
         Self {
             num,
             flat_slides,
@@ -214,6 +295,20 @@ impl Signature {
             black_pawn_takes: (0..num)
                 .map(|idx| pawn_attacks(Team::Black, Square { idx }))
                 .collect(),
+            white_pawn_promotions: (0..num)
+                .map(|idx| {
+                    let ans = white_pawn_promotions.get(&Square { idx }).cloned();
+                    ans
+                })
+                .collect(),
+            black_pawn_promotions: (0..num)
+                .map(|idx| {
+                    let ans = black_pawn_promotions.get(&Square { idx }).cloned();
+                    ans
+                })
+                .collect(),
+            white_pawn_promotion_distance,
+            black_pawn_promotion_distance,
         }
     }
 

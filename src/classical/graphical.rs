@@ -514,18 +514,7 @@ impl Canvas for GameInterface {
                 Some(m_idx) => {
                     let m = self.moves[m_idx.idx];
                     let squares = match m {
-                        Move::Standard {
-                            piece,
-                            victim: None,
-                            from_sq,
-                            to_sq,
-                        } => vec![from_sq, to_sq],
-                        Move::Standard {
-                            piece,
-                            victim: Some(victim),
-                            from_sq,
-                            to_sq,
-                        } => vec![from_sq, to_sq],
+                        Move::Standard { from_sq, to_sq, .. } => vec![from_sq, to_sq],
                     };
                     for square in squares.iter().map(|s| sq_to_grid(*s)) {
                         target
@@ -632,28 +621,18 @@ impl GameInterface {
                     match m {
                         Move::Standard {
                             piece,
-                            victim: None,
+                            victim: victim_opt,
+                            promotion: promotion_opt,
                             from_sq,
                             to_sq,
                         } => {
                             if grid_to_sq(pos.0, pos.1) == from_sq {
                                 self.move_buttons.push(MoveButton {
                                     pos: sq_to_grid(to_sq),
-                                    colour: (0.0, 0.5, 1.0),
-                                    move_idx: m_idx,
-                                });
-                            }
-                        }
-                        Move::Standard {
-                            piece,
-                            victim: Some(victim),
-                            from_sq,
-                            to_sq,
-                        } => {
-                            if grid_to_sq(pos.0, pos.1) == from_sq {
-                                self.move_buttons.push(MoveButton {
-                                    pos: sq_to_grid(to_sq),
-                                    colour: (1.0, 0.0, 0.0),
+                                    colour: match (victim_opt) {
+                                        Some(_) => (1.0, 0.0, 0.0),
+                                        None => (0.0, 0.5, 1.0),
+                                    },
                                     move_idx: m_idx,
                                 });
                             }

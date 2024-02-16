@@ -80,7 +80,42 @@ pub fn create_signature() -> signature::Signature {
         }
     };
 
-    signature::Signature::new(64, &flat_nbs, &diag_nbs, &opp, &opp, &pawn_moves)
+    signature::Signature::new(
+        64,
+        &flat_nbs,
+        &diag_nbs,
+        &opp,
+        &opp,
+        &pawn_moves,
+        (0..8)
+            .map(|x| {
+                (
+                    grid_to_sq(x, 7),
+                    vec![
+                        PieceKind::Knight,
+                        PieceKind::Bishop,
+                        PieceKind::Rook,
+                        PieceKind::Queen,
+                    ],
+                )
+            })
+            .into_iter()
+            .collect(),
+        (0..8)
+            .map(|x| {
+                (
+                    grid_to_sq(x, 0),
+                    vec![
+                        PieceKind::Knight,
+                        PieceKind::Bishop,
+                        PieceKind::Rook,
+                        PieceKind::Queen,
+                    ],
+                )
+            })
+            .into_iter()
+            .collect(),
+    )
 }
 
 pub fn create_game() -> Board {
