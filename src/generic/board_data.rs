@@ -653,17 +653,17 @@ impl BoardData {
                         }
                     }
                 }
-                Score::Heuristic(score)
+                Score::Heuristic(match board.get_turn() {
+                    Team::White => score,
+                    Team::Black => -score,
+                })
             }
         };
 
         Self {
             moves: moves.into_iter().map(|m| MoveData::new(m)).collect(),
             is_check: is_check,
-            evaluation: match board.get_turn() {
-                Team::White => score,
-                Team::Black => -score,
-            },
+            evaluation: score,
         }
     }
 

@@ -247,14 +247,16 @@ impl Board {
             } => {
                 debug_assert_eq!(piece.team, self.turn);
                 debug_assert_eq!(self.get_square(from_sq).unwrap(), piece);
-                debug_assert!(self.get_square(to_sq).is_none());
                 self.good_pieces().remove(&from_sq);
                 match victim_opt {
                     Some(victim) => {
+                        debug_assert_eq!(self.get_square(to_sq).unwrap(), victim);
                         debug_assert_ne!(victim.team, self.turn);
                         self.bad_pieces().remove(&to_sq);
                     }
-                    None => {}
+                    None => {
+                        debug_assert!(self.get_square(to_sq).is_none());
+                    }
                 }
                 match promotion_opt {
                     Some(promotion) => {
@@ -302,7 +304,21 @@ impl Board {
             } => {
                 debug_assert_eq!(piece.team, self.turn);
                 debug_assert!(self.get_square(from_sq).is_none());
-                debug_assert_eq!(self.get_square(to_sq).unwrap(), piece);
+                match promotion_opt {
+                    Some(promotion) => {
+                        debug_assert_eq!(
+                            self.get_square(to_sq).unwrap(),
+                            Piece {
+                                team: piece.team,
+                                moved: piece.moved,
+                                kind: promotion
+                            }
+                        );
+                    }
+                    None => {
+                        debug_assert_eq!(self.get_square(to_sq).unwrap(), piece);
+                    }
+                }
                 self.good_pieces().remove(&to_sq);
                 match victim_opt {
                     Some(victim) => {

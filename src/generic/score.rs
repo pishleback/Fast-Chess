@@ -8,8 +8,8 @@ pub enum Score {
     Lost(usize),
     Draw(usize),
     Won(usize),
-    NegInf,
-    PosInf,
+    // NegInf,
+    // PosInf,
 }
 
 impl PartialOrd for Score {
@@ -20,12 +20,12 @@ impl PartialOrd for Score {
 impl Ord for Score {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
-            (Score::NegInf, Score::NegInf) => std::cmp::Ordering::Equal,
-            (Score::PosInf, Score::PosInf) => std::cmp::Ordering::Equal,
-            (Score::NegInf, _) => std::cmp::Ordering::Less,
-            (Score::PosInf, _) => std::cmp::Ordering::Greater,
-            (_, Score::NegInf) => std::cmp::Ordering::Greater,
-            (_, Score::PosInf) => std::cmp::Ordering::Less,
+            // (Score::NegInf, Score::NegInf) => std::cmp::Ordering::Equal,
+            // (Score::PosInf, Score::PosInf) => std::cmp::Ordering::Equal,
+            // (Score::NegInf, _) => std::cmp::Ordering::Less,
+            // (Score::PosInf, _) => std::cmp::Ordering::Greater,
+            // (_, Score::NegInf) => std::cmp::Ordering::Greater,
+            // (_, Score::PosInf) => std::cmp::Ordering::Less,
             (Score::Lost(a), Score::Lost(b)) => a.cmp(b),
             (Score::Won(a), Score::Won(b)) => a.cmp(b).reverse(),
             (Score::Lost(_), _) => std::cmp::Ordering::Less,
@@ -49,8 +49,8 @@ impl Neg for Score {
             Score::Lost(n) => Score::Won(n),
             Score::Draw(n) => Score::Draw(n),
             Score::Won(n) => Score::Lost(n),
-            Score::NegInf => Score::PosInf,
-            Score::PosInf => Score::NegInf,
+            // Score::NegInf => Score::PosInf,
+            // Score::PosInf => Score::NegInf,
         }
     }
 }
@@ -64,120 +64,88 @@ impl Score {
     }
 }
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// pub enum Score {
-//     Finite(i64),
-//     PosInf,
-//     NegInf,
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LowerBound {
+    Finite(Score),
+    NegInf,
+}
 
-// impl PartialOrd for Score {
-//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-//         Some(self.cmp(other))
-//     }
-// }
-// impl Ord for Score {
-//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-//         match (self, other) {
-//             (Score::NegInf, _) => std::cmp::Ordering::Less,
-//             (Score::PosInf, _) => std::cmp::Ordering::Greater,
-//             (_, Score::NegInf) => std::cmp::Ordering::Greater,
-//             (_, Score::PosInf) => std::cmp::Ordering::Less,
-//             (Score::Finite(a), Score::Finite(b)) => a.cmp(b),
-//         }
-//     }
-// }
-// impl AddAssign for Score {
-//     fn add_assign(mut self: &mut Self, rhs: Self) {
-//         match (&mut self, rhs) {
-//             (Score::Finite(a), Score::Finite(b)) => a.add_assign(b),
-//             (Score::Finite(a), Score::PosInf) => *self = Score::PosInf,
-//             (Score::Finite(a), Score::NegInf) => *self = Score::NegInf,
-//             (Score::PosInf, Score::Finite(b)) => {}
-//             (Score::PosInf, Score::PosInf) => {}
-//             (Score::PosInf, Score::NegInf) => panic!(),
-//             (Score::NegInf, Score::Finite(b)) => {}
-//             (Score::NegInf, Score::PosInf) => panic!(),
-//             (Score::NegInf, Score::NegInf) => {}
-//         }
-//     }
-// }
-// impl SubAssign for Score {
-//     fn sub_assign(mut self: &mut Self, rhs: Self) {
-//         match (&mut self, rhs) {
-//             (Score::Finite(a), Score::Finite(b)) => a.sub_assign(b),
-//             (Score::Finite(a), Score::PosInf) => *self = Score::NegInf,
-//             (Score::Finite(a), Score::NegInf) => *self = Score::PosInf,
-//             (Score::PosInf, Score::Finite(b)) => {}
-//             (Score::PosInf, Score::PosInf) => panic!(),
-//             (Score::PosInf, Score::NegInf) => {}
-//             (Score::NegInf, Score::Finite(b)) => {}
-//             (Score::NegInf, Score::PosInf) => {}
-//             (Score::NegInf, Score::NegInf) => panic!(),
-//         }
-//     }
-// }
-// impl Neg for Score {
-//     type Output = Score;
+impl Neg for LowerBound {
+    type Output = UpperBound;
 
-//     fn neg(self) -> Self::Output {
-//         match self {
-//             Score::Finite(a) => Score::Finite(-a),
-//             Score::PosInf => Score::NegInf,
-//             Score::NegInf => Score::PosInf,
-//         }
-//     }
-// }
-// impl Add<Score> for Score {
-//     type Output = Score;
+    fn neg(self) -> Self::Output {
+        match self {
+            LowerBound::Finite(v) => UpperBound::Finite(-v),
+            LowerBound::NegInf => UpperBound::PosInf,
+        }
+    }
+}
 
-//     fn add(self, rhs: Score) -> Self::Output {
-//         match (self, rhs) {
-//             (Score::Finite(a), Score::Finite(b)) => Score::Finite(a + b),
-//             (Score::Finite(a), Score::PosInf) => Score::PosInf,
-//             (Score::Finite(a), Score::NegInf) => Score::NegInf,
-//             (Score::PosInf, Score::Finite(b)) => Score::PosInf,
-//             (Score::PosInf, Score::PosInf) => Score::PosInf,
-//             (Score::PosInf, Score::NegInf) => panic!(),
-//             (Score::NegInf, Score::Finite(b)) => Score::NegInf,
-//             (Score::NegInf, Score::PosInf) => panic!(),
-//             (Score::NegInf, Score::NegInf) => Score::NegInf,
-//         }
-//     }
-// }
-// impl Sub<Score> for Score {
-//     type Output = Score;
+impl PartialOrd for LowerBound {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
-//     fn sub(self, rhs: Score) -> Self::Output {
-//         match (self, rhs) {
-//             (Score::Finite(a), Score::Finite(b)) => Score::Finite(a - b),
-//             (Score::Finite(a), Score::PosInf) => Score::NegInf,
-//             (Score::Finite(a), Score::NegInf) => Score::PosInf,
-//             (Score::PosInf, Score::Finite(b)) => Score::PosInf,
-//             (Score::PosInf, Score::PosInf) => panic!(),
-//             (Score::PosInf, Score::NegInf) => Score::PosInf,
-//             (Score::NegInf, Score::Finite(b)) => Score::NegInf,
-//             (Score::NegInf, Score::PosInf) => Score::NegInf,
-//             (Score::NegInf, Score::NegInf) => panic!(),
-//         }
-//     }
-// }
-// impl Mul<i64> for Score {
-//     type Output = Score;
+impl Ord for LowerBound {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (LowerBound::Finite(a), LowerBound::Finite(b)) => a.cmp(b),
+            (LowerBound::Finite(a), LowerBound::NegInf) => std::cmp::Ordering::Greater,
+            (LowerBound::NegInf, LowerBound::Finite(b)) => std::cmp::Ordering::Less,
+            (LowerBound::NegInf, LowerBound::NegInf) => std::cmp::Ordering::Equal,
+        }
+    }
+}
 
-//     fn mul(self, rhs: i64) -> Self::Output {
-//         assert!(rhs > 0);
-//         match self {
-//             Score::Finite(a) => match a.checked_mul(rhs) {
-//                 Some(ans) => Score::Finite(ans),
-//                 None => match a.cmp(&0) {
-//                     std::cmp::Ordering::Less => Score::NegInf,
-//                     std::cmp::Ordering::Equal => Score::Finite(0),
-//                     std::cmp::Ordering::Greater => Score::PosInf,
-//                 },
-//             },
-//             Score::PosInf => Score::PosInf,
-//             Score::NegInf => Score::NegInf,
-//         }
-//     }
-// }
+impl LowerBound {
+    pub fn is_improvement(&self, score: &Score) -> bool {
+        match self {
+            LowerBound::Finite(lb) => lb <= score,
+            LowerBound::NegInf => true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpperBound {
+    Finite(Score),
+    PosInf,
+}
+
+impl Neg for UpperBound {
+    type Output = LowerBound;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            UpperBound::Finite(v) => LowerBound::Finite(-v),
+            UpperBound::PosInf => LowerBound::NegInf,
+        }
+    }
+}
+
+impl PartialOrd for UpperBound {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for UpperBound {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (UpperBound::Finite(a), UpperBound::Finite(b)) => a.cmp(b),
+            (UpperBound::Finite(a), UpperBound::PosInf) => std::cmp::Ordering::Less,
+            (UpperBound::PosInf, UpperBound::Finite(b)) => std::cmp::Ordering::Greater,
+            (UpperBound::PosInf, UpperBound::PosInf) => std::cmp::Ordering::Equal,
+        }
+    }
+}
+
+impl UpperBound {
+    pub fn is_improvement(&self, score: &Score) -> bool {
+        match self {
+            UpperBound::Finite(ub) => score <= ub,
+            UpperBound::PosInf => true,
+        }
+    }
+}
