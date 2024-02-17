@@ -1,2 +1,1 @@
-# Fast Chess
- Fast chess AI written in rust
+A chess GUI and AI written in rust
