@@ -18,7 +18,7 @@ use super::*;
 #[derive(Debug, Clone, Copy)]
 struct AlphaBetaMaximizingResult {
     score: Score,
-    depth: usize,
+    depth: isize,
     exact: bool,
 }
 impl Neg for AlphaBetaMaximizingResult {
@@ -36,7 +36,7 @@ impl Neg for AlphaBetaMaximizingResult {
 #[derive(Debug, Clone, Copy)]
 struct AlphaBetaMinimizingResult {
     score: Score,
-    depth: usize,
+    depth: isize,
     exact: bool,
 }
 impl Neg for AlphaBetaMinimizingResult {
@@ -88,21 +88,25 @@ impl MoveData {
     fn alpha_beta(
         &mut self,
         stop_check: &impl Fn() -> bool,
+        node_count: Arc<Mutex<usize>>,
         board: &mut Board,
         depth: usize,
         max_depth: usize,
         max_quiesce_depth: usize,
-        alpha: LowerBound,
-        beta: UpperBound,
+        max_node_count: usize,
+        alpha: LowerBoundRef,
+        beta: UpperBoundRef,
     ) -> Result<AlphaBetaMinimizingResult, ()> {
         board.make_move(self.mv);
         let board_data = self.get_board(board);
         if let Ok(abres) = board_data.alpha_beta(
             stop_check,
+            node_count,
             board,
             depth,
             max_depth,
             max_quiesce_depth,
+            max_node_count,
             -beta,
             -alpha,
         ) {
@@ -114,170 +118,130 @@ impl MoveData {
             Err(())
         }
     }
-
-    // fn quiesce(
-    //     &mut self,
-    //     stop_check: &impl Fn() -> bool,
-    //     board: &mut Board,
-    //     depth: usize,
-    //     max_quiesce_depth: usize,
-    //     mut alpha: LowerBound,
-    //     beta: UpperBound,
-    // ) -> Result<AlphaBetaResult, ()> {
-    //     if stop_check() {
-    //         return Err(());
-    //     }
-
-    //     //alpha is the score we already know we can achive
-    //     //beta is the score the opponent knows they can achive
-    //     let board_data = self.get_board(board);
-    //     if board_data.is_terminal() {
-    //         return Ok(-board_data.get_evaluation());
-    //     }
-
-    //     let score = -{
-    //         let standpat = board_data.get_evaluation();
-    //         if depth >= max_quiesce_depth {
-    //             standpat
-    //         } else {
-    //             // if alpha < standpat {
-    //             //     alpha = standpat;
-    //             // }
-    //             // if standpat >= beta {
-    //             //     return Ok(standpat);
-    //             // }
-    //             let mut bestscore = standpat; // valid by null move observation, not as valid in very late game
-    //             let mut moves = board_data
-    //                 .get_moves_data_mut()
-    //                 .iter_mut()
-    //                 .collect::<Vec<_>>();
-    //             moves.sort_by_key(|mv| -mv.get_approx_score());
-    //             for move_data in &mut moves {
-    //                 let m = move_data.mv;
-    //                 if let Some(material_gain) = match m {
-    //                     Move::Standard { victim: None, .. } => None,
-    //                     Move::Standard {
-    //                         victim: Some(victim),
-    //                         ..
-    //                     } => Some(victim.kind.worth().unwrap() * 1000),
-    //                 } {
-    //                     if standpat.add_heuristic(material_gain + 200) < alpha {
-    //                         //delta prune
-    //                         // println!("delta prune {:?}", deep);
-    //                         continue;
-    //                     }
-    //                     // let og_board = self.board.clone();
-    //                     board.make_move(m);
-    //                     if let Ok(score) = move_data.quiesce(
-    //                         stop_check,
-    //                         board,
-    //                         depth + 1,
-    //                         max_quiesce_depth,
-    //                         -beta,
-    //                         -alpha,
-    //                     ) {
-    //                         board.unmake_move();
-    //                         // debug_assert_eq!(self.board, &og_board);
-    //                         if score > bestscore {
-    //                             bestscore = score;
-    //                             if score > alpha {
-    //                                 alpha = score;
-    //                             }
-    //                         }
-    //                         if score >= beta {
-    //                             break; //the opponent already has a method to avoid us getting this score here, so we can stop looking
-    //                         }
-    //                     } else {
-    //                         board.unmake_move();
-    //                         return Err(());
-    //                     }
-    //                     // }
-    //                 }
-    //             }
-    //             bestscore
-    //         }
-    //     };
-    //     self.score = Some(ApproxScore { score });
-    //     Ok(score)
-    // }
 }
 
+//alpha is the score we already know we can achive
+//beta is the score the opponent knows they can achive
 impl BoardData {
     fn alpha_beta(
         &mut self,
         stop_check: &impl Fn() -> bool,
+        node_count: Arc<Mutex<usize>>,
         board: &mut Board,
         depth: usize,
         max_depth: usize,
         max_quiesce_depth: usize,
-        mut alpha: LowerBound,
-        beta: UpperBound,
+        max_node_count: usize,
+        alpha: LowerBoundRef,
+        beta: UpperBoundRef,
     ) -> Result<AlphaBetaMaximizingResult, ()> {
         if stop_check() {
             return Err(());
         }
 
-        //alpha is the score we already know we can achive
-        //beta is the score the opponent knows they can achive
-        if self.is_terminal() {
-            //no moves, return whether it is a win, draw, or loss
-            Ok(AlphaBetaMaximizingResult {
-                score: self.get_evaluation(),
-                depth: max_depth - depth,
-                exact: true,
-            })
-        } else if depth >= max_depth {
-            //TODO: quiesce
-            Ok(AlphaBetaMaximizingResult {
-                score: self.get_evaluation(),
-                depth: max_depth - depth,
-                exact: true,
-            })
-        } else {
-            macro_rules! get_score_and_beta_prune {
-                ($move_data:expr) => {{
-                    let score = $move_data
-                        .alpha_beta(
-                            stop_check,
-                            board,
-                            depth + 1,
-                            max_depth,
-                            max_quiesce_depth,
-                            alpha,
-                            beta,
-                        )?
-                        .score;
-                    if !beta.is_improvement(&score) {
-                        //beta prune
+        {
+            let mut node_count_value = node_count.lock().unwrap();
+            *node_count_value += 1;
+            if *node_count_value > max_node_count {
+                return Err(());
+            }
+        }
+
+        let eval = self.get_evaluation();
+        match eval {
+            Score::Lost(_) | Score::Draw(_) | Score::Won(_) => {
+                //board is terminal
+                Ok(AlphaBetaMaximizingResult {
+                    score: eval,
+                    depth: max_depth as isize - depth as isize,
+                    exact: true,
+                })
+            }
+            Score::Heuristic(stand_pat) => {
+                if depth >= max_quiesce_depth {
+                    Ok(AlphaBetaMaximizingResult {
+                        score: self.get_evaluation(),
+                        depth: max_depth as isize - depth as isize,
+                        exact: true,
+                    })
+                } else {
+                    let quiesce = depth >= max_depth;
+
+                    macro_rules! get_score_and_beta_prune {
+                        ($move_data:expr) => {{
+                            let score = $move_data
+                                .alpha_beta(
+                                    stop_check,
+                                    node_count.clone(),
+                                    board,
+                                    depth + 1,
+                                    max_depth,
+                                    max_quiesce_depth,
+                                    max_node_count,
+                                    alpha.clone(),
+                                    beta.branch(),
+                                )?
+                                .score;
+                            if !beta.get_bound().is_improvement(&score) {
+                                //beta prune
+                                return Ok(AlphaBetaMaximizingResult {
+                                    score: score,
+                                    depth: max_depth as isize - depth as isize,
+                                    exact: false,
+                                });
+                            }
+                            score
+                        }};
+                    }
+
+                    let mut moves = self
+                        .get_moves_data_mut()
+                        .iter_mut()
+                        .filter(|move_data| match quiesce {
+                            true => match move_data.mv {
+                                Move::Standard {
+                                    piece,
+                                    victim: victim_opt,
+                                    promotion: promotion_opt,
+                                    from_sq,
+                                    to_sq,
+                                } => match victim_opt {
+                                    Some(victim) => {
+                                        alpha.get_bound().is_improvement(&Score::Heuristic(
+                                            stand_pat + victim.kind.worth().unwrap() * 1000 + 200, //delta prune
+                                        ))
+                                    }
+                                    None => false,
+                                },
+                            },
+                            false => true,
+                        })
+                        .collect::<Vec<_>>();
+                    if moves.len() == 0 {
                         return Ok(AlphaBetaMaximizingResult {
-                            score: score,
-                            depth: max_depth - depth,
-                            exact: false,
+                            score: eval,
+                            depth: max_depth as isize - depth as isize,
+                            exact: true,
                         });
                     }
-                    score
-                }};
-            }
-
-            let mut moves = self.get_moves_data_mut().iter_mut().collect::<Vec<_>>();
-            moves.sort_by_key(|mv| mv.get_approx_score());
-            debug_assert!(!moves.is_empty());
-            let first_move_data = moves.pop().unwrap();
-            let mut bestscore = get_score_and_beta_prune!(first_move_data);
-            for move_data in moves.into_iter().rev() {
-                let score = get_score_and_beta_prune!(move_data);
-                if score > bestscore {
-                    bestscore = score;
-                    if alpha.is_improvement(&score) {
-                        alpha = LowerBound::Finite(score);
+                    moves.sort_by_key(|mv| mv.get_approx_score());
+                    debug_assert!(!moves.is_empty());
+                    let first_move_data = moves.pop().unwrap();
+                    let mut bestscore = get_score_and_beta_prune!(first_move_data);
+                    for move_data in moves.into_iter().rev() {
+                        let score = get_score_and_beta_prune!(move_data);
+                        if score > bestscore {
+                            bestscore = score;
+                            alpha.refine_bound(score);
+                        }
                     }
+                    Ok(AlphaBetaMaximizingResult {
+                        score: bestscore,
+                        depth: max_depth as isize - depth as isize,
+                        exact: true,
+                    })
                 }
             }
-            Ok(AlphaBetaMaximizingResult {
-                score: bestscore,
-                depth: max_depth - depth,
-                exact: true,
-            })
         }
     }
 }
@@ -299,52 +263,71 @@ impl BoardTree {
         &mut self,
         max_depth: usize,
         max_quiesce_depth: usize,
-        stop_check: impl Fn() -> bool,
-    ) -> Result<(Option<MoveIdx>, LowerBound), ()> {
+        max_node_count: usize,
+        stop_flag: Arc<Mutex<bool>>,
+    ) -> Result<Option<(MoveIdx, Score, usize)>, ()> {
         let mut moves = self
             .root
             .get_moves_data_mut()
             .iter_mut()
             .enumerate()
-            .map(|(idx, mv)| (MoveIdx { idx }, mv))
+            .map(|(idx, mv)| (MoveIdx { idx }, mv, self.board.clone()))
             .collect::<Vec<_>>();
-        moves.sort_by_key(|(mv_idx, mv)| mv.get_approx_score());
+        moves.sort_by_key(|(mv_idx, mv, board)| mv.get_approx_score());
         let n = moves.len();
         if n == 0 {
-            Ok((None, LowerBound::NegInf))
+            Ok(None)
         } else {
-            let (mut best_move_idx, first_move_data) = moves.pop().unwrap();
-            let mut bestscore = first_move_data
-                .alpha_beta(
-                    &stop_check,
-                    &mut self.board,
-                    0,
-                    max_depth,
-                    max_quiesce_depth,
-                    LowerBound::NegInf,
-                    UpperBound::PosInf,
-                )?
-                .score;
-            println!("  1/{:?}", n);
-            for (idx, (move_idx, move_data)) in moves.into_iter().rev().enumerate() {
-                let score = move_data
-                    .alpha_beta(
+            let alpha = LowerBoundRef::new_inf();
+            let beta = UpperBoundRef::new_inf();
+            let node_count = Arc::new(Mutex::new(0));
+
+            use rayon::prelude::*;
+
+            let results = moves
+                .into_iter()
+                .rev()
+                .enumerate()
+                .par_bridge() //so that moves start processing in order - to help with alpha-beta pruning
+                .into_par_iter()
+                .map(|(idx, (move_idx, move_data, mut board))| {
+                    let stop_check = || *stop_flag.lock().unwrap();
+                    match move_data.alpha_beta(
                         &stop_check,
-                        &mut self.board,
+                        node_count.clone(),
+                        &mut board,
                         0,
                         max_depth,
                         max_quiesce_depth,
-                        LowerBound::Finite(bestscore),
-                        UpperBound::PosInf,
-                    )?
-                    .score;
-                println!("  {:?}/{:?}", idx + 2, n);
-                if score > bestscore {
-                    bestscore = score;
-                    best_move_idx = move_idx;
+                        max_node_count,
+                        alpha.clone(),
+                        beta.branch(),
+                    ) {
+                        Ok(score) => {
+                            let score = score.score;
+                            println!("  {:?}/{:?}", idx + 1, n);
+                            let bound = alpha.get_bound();
+                            alpha.refine_bound(score);
+                            Ok((move_idx, score))
+                        }
+                        Err(()) => Err(()),
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            if results.iter().any(|result| result.is_err()) {
+                Err(())
+            } else {
+                let scores = results
+                    .into_iter()
+                    .map(|result| result.unwrap())
+                    .collect::<Vec<_>>();
+                if let Some(best) = scores.into_iter().max_by_key(|(move_idx, score)| *score) {
+                    Ok(Some((best.0, best.1, *node_count.lock().unwrap())))
+                } else {
+                    Ok(None)
                 }
             }
-            Ok((Some(best_move_idx), LowerBound::Finite(bestscore)))
         }
     }
 
@@ -354,6 +337,16 @@ impl BoardTree {
         self.root = match &md.board {
             Some(board) => board.clone(),
             None => md.get_board(&mut self.board).clone(),
+        }
+    }
+
+    pub fn unmake_move(&mut self) -> Result<(), ()> {
+        match self.board.unmake_move() {
+            Ok(()) => {
+                self.root = BoardData::new(&mut self.board);
+                Ok(())
+            }
+            Err(()) => Err(()),
         }
     }
 }
@@ -371,16 +364,23 @@ impl AiOn {
         best_move: Arc<Mutex<Option<MoveIdx>>>,
         mut tree: BoardTree,
     ) -> (BoardTree, Option<MoveIdx>) {
-        let stop_check = || *stop_flag.lock().unwrap();
         let mut depth = 1;
-        println!("start");
+        println!("Search started");
         loop {
-            match tree.best_move_at_depth(depth - 1, depth * 2 - 1, stop_check) {
-                Ok((best_move_answer, score)) => {
-                    *best_move.lock().unwrap() = best_move_answer;
-                    println!("done at depth = {:?} with score = {:?}", depth, score);
+            match tree.best_move_at_depth(depth - 1, depth * 2 - 1, 3000000, stop_flag.clone()) {
+                Ok(None) => {
+                    println!("No moves");
+                    break;
+                }
+                Ok(Some((best_move_answer, score, node_count))) => {
+                    *best_move.lock().unwrap() = Some(best_move_answer);
+                    println!(
+                        "Done at depth = {:?} with score = {:?} and {:?} boards checked",
+                        depth, score, node_count
+                    );
                 }
                 Err(()) => {
+                    println!("Search stopped");
                     break;
                 }
             }
@@ -422,6 +422,10 @@ impl AiOff {
 
     pub fn make_move(&mut self, m: MoveIdx) {
         self.tree.make_move(m);
+    }
+
+    pub fn unmake_move(&mut self) -> Result<(), ()> {
+        self.tree.unmake_move()
     }
 
     pub fn start(self) -> AiOn {

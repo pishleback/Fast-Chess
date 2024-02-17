@@ -579,16 +579,16 @@ impl BoardData {
                     if piece.kind == PieceKind::Pawn {
                         match board.signature.get_pawn_promotion_distance(*sq, piece.team) {
                             Some(1) => {
-                                score += signed_score!(piece.team, 2000);
+                                score += signed_score!(piece.team, 2500);
                             }
                             Some(2) => {
-                                score += signed_score!(piece.team, 100);
+                                score += signed_score!(piece.team, 300);
                             }
                             Some(3) => {
-                                score += signed_score!(piece.team, 10);
+                                score += signed_score!(piece.team, 100);
                             }
                             Some(4) => {
-                                score += signed_score!(piece.team, 5);
+                                score += signed_score!(piece.team, 20);
                             }
                             Some(5) => {
                                 score += signed_score!(piece.team, 1);
@@ -622,33 +622,25 @@ impl BoardData {
                                 slide_idx,
                             } => piece,
                         };
-                        match board.get_square(sq) {
-                            Some(to_piece) => {
-                                if to_piece.team == from_piece.team {
-                                    //defend
-                                    if to_piece.kind != PieceKind::King
-                                        && from_piece.kind != PieceKind::King
-                                    {
-                                        let from_worth = from_piece.kind.worth().unwrap();
-                                        let to_worth = to_piece.kind.worth().unwrap();
-                                        if to_worth <= from_worth {
-                                            score += signed_score!(team, 3);
+                        if from_piece.kind != PieceKind::King {
+                            let from_worth = from_piece.kind.worth().unwrap();
+                            match board.get_square(sq) {
+                                Some(to_piece) => {
+                                    if to_piece.kind != PieceKind::King {
+                                        let to_worth = to_piece.kind.worth();
+                                        if to_piece.team == from_piece.team {
+                                            //defend
+                                        } else {
+                                            //attack
+                                            score += signed_score!(team, (10 - from_worth) * 3);
                                         }
                                     }
-                                } else {
-                                    // //attack
-                                    // if to_piece.kind != PieceKind::King
-                                    //     && from_piece.kind != PieceKind::King
-                                    // {
-                                    //     let from_worth = from_piece.kind.worth().unwrap();
-                                    //     let to_worth = to_piece.kind.worth().unwrap();
-                                    //     score += signed_score!(team, to_worth * 10);
-                                    // }
                                 }
-                            }
-                            None => {
-                                //visible
-                                score += signed_score!(team, 1);
+                                None => {
+                                    //visible
+
+                                    score += signed_score!(team, 10 - from_worth);
+                                }
                             }
                         }
                     }

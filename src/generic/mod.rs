@@ -290,55 +290,61 @@ impl Board {
         }
     }
 
-    pub fn unmake_move(&mut self) {
-        let m = self.moves.pop().unwrap();
-        self.turn = self.turn.flip();
+    pub fn unmake_move(&mut self) -> Result<(), ()> {
+        match self.moves.pop() {
+            Some(m) => {
+                self.turn = self.turn.flip();
 
-        match m {
-            Move::Standard {
-                piece,
-                victim: victim_opt,
-                promotion: promotion_opt,
-                from_sq,
-                to_sq,
-            } => {
-                debug_assert_eq!(piece.team, self.turn);
-                debug_assert!(self.get_square(from_sq).is_none());
-                match promotion_opt {
-                    Some(promotion) => {
-                        debug_assert_eq!(
-                            self.get_square(to_sq).unwrap(),
-                            Piece {
-                                team: piece.team,
-                                moved: piece.moved,
-                                kind: promotion
+                match m {
+                    Move::Standard {
+                        piece,
+                        victim: victim_opt,
+                        promotion: promotion_opt,
+                        from_sq,
+                        to_sq,
+                    } => {
+                        debug_assert_eq!(piece.team, self.turn);
+                        debug_assert!(self.get_square(from_sq).is_none());
+                        match promotion_opt {
+                            Some(promotion) => {
+                                debug_assert_eq!(
+                                    self.get_square(to_sq).unwrap(),
+                                    Piece {
+                                        team: piece.team,
+                                        moved: piece.moved,
+                                        kind: promotion
+                                    }
+                                );
                             }
-                        );
-                    }
-                    None => {
-                        debug_assert_eq!(self.get_square(to_sq).unwrap(), piece);
+                            None => {
+                                debug_assert_eq!(self.get_square(to_sq).unwrap(), piece);
+                            }
+                        }
+                        self.good_pieces().remove(&to_sq);
+                        match victim_opt {
+                            Some(victim) => {
+                                debug_assert_ne!(victim.team, self.turn);
+                                self.bad_pieces().insert(to_sq, victim);
+                            }
+                            None => {}
+                        }
+                        self.good_pieces().insert(from_sq, piece);
+                        if piece.kind == PieceKind::King {
+                            match piece.team {
+                                Team::White => self.white_king = from_sq,
+                                Team::Black => self.black_king = from_sq,
+                            }
+                        }
                     }
                 }
-                self.good_pieces().remove(&to_sq);
-                match victim_opt {
-                    Some(victim) => {
-                        debug_assert_ne!(victim.team, self.turn);
-                        self.bad_pieces().insert(to_sq, victim);
-                    }
-                    None => {}
-                }
-                self.good_pieces().insert(from_sq, piece);
-                if piece.kind == PieceKind::King {
-                    match piece.team {
-                        Team::White => self.white_king = from_sq,
-                        Team::Black => self.black_king = from_sq,
-                    }
-                }
-            }
-        }
 
-        if cfg!(debug_assertions) {
-            self.check();
+                if cfg!(debug_assertions) {
+                    self.check();
+                }
+
+                Ok(())
+            }
+            None => Err(()),
         }
     }
 }

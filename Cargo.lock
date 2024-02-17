@@ -851,6 +851,7 @@ dependencies = [
  "colored",
  "glium",
  "image",
+ "rayon",
 ]
 
 [[package]]

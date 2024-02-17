@@ -598,6 +598,24 @@ impl Canvas for GameInterface {
                         _ => {}
                     };
                 }
+                glium::glutin::event::DeviceEvent::Key(k) => match (k.state, k.virtual_keycode) {
+                    (
+                        glium::glutin::event::ElementState::Pressed,
+                        Some(glium::glutin::event::VirtualKeyCode::Return),
+                    ) => match self.board_ai.as_ref().unwrap().current_best_move() {
+                        Some(current_best_move) => {
+                            self.make_move(current_best_move);
+                        }
+                        None => {}
+                    },
+                    (
+                        glium::glutin::event::ElementState::Pressed,
+                        Some(glium::glutin::event::VirtualKeyCode::Back),
+                    ) => {
+                        self.unmake_move();
+                    }
+                    _ => {}
+                },
                 _ => {}
             },
             _ => {}
@@ -648,6 +666,15 @@ impl GameInterface {
         self.set_selected(None);
         let (mut ai_off, best_move) = self.board_ai.take().unwrap().finish();
         ai_off.make_move(m);
+        self.board = ai_off.get_board().clone();
+        self.moves = ai_off.get_moves();
+        self.board_ai = Some(ai_off.start());
+    }
+
+    fn unmake_move(&mut self) {
+        self.set_selected(None);
+        let (mut ai_off, best_move) = self.board_ai.take().unwrap().finish();
+        ai_off.unmake_move();
         self.board = ai_off.get_board().clone();
         self.moves = ai_off.get_moves();
         self.board_ai = Some(ai_off.start());

@@ -1,4 +1,7 @@
-use std::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
+use std::{
+    ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign},
+    sync::{Arc, Mutex},
+};
 
 use super::*;
 
@@ -147,5 +150,91 @@ impl UpperBound {
             UpperBound::Finite(ub) => score <= ub,
             UpperBound::PosInf => true,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LowerBoundRef {
+    values: Vec<Arc<Mutex<UpperBound>>>, //we are the maximum of these upper bounds
+}
+impl Neg for LowerBoundRef {
+    type Output = UpperBoundRef;
+
+    fn neg(self) -> Self::Output {
+        UpperBoundRef {
+            values: self.values,
+        }
+    }
+}
+impl LowerBoundRef {
+    pub fn new_inf() -> Self {
+        Self {
+            values: vec![Arc::new(Mutex::new(UpperBound::PosInf))],
+        }
+    }
+    pub fn get_bound(&self) -> LowerBound {
+        -self
+            .values
+            .iter()
+            .map(|value| *value.lock().unwrap())
+            .min()
+            .unwrap()
+    }
+    pub fn refine_bound(&self, score: Score) -> bool {
+        let mut bound = self.values.last().unwrap().lock().unwrap();
+        let bound_neg = -*bound;
+        if bound_neg.is_improvement(&score) {
+            *bound = -LowerBound::Finite(score);
+            true
+        } else {
+            false
+        }
+    }
+    pub fn branch(&self) -> Self {
+        let mut branch = self.clone();
+        branch.values.push(Arc::new(Mutex::new(UpperBound::PosInf)));
+        branch
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UpperBoundRef {
+    values: Vec<Arc<Mutex<UpperBound>>>, //we are the minimum of these lower bounds represented as negative upper bounds
+}
+impl Neg for UpperBoundRef {
+    type Output = LowerBoundRef;
+
+    fn neg(self) -> Self::Output {
+        LowerBoundRef {
+            values: self.values,
+        }
+    }
+}
+impl UpperBoundRef {
+    pub fn new_inf() -> Self {
+        Self {
+            values: vec![Arc::new(Mutex::new(UpperBound::PosInf))],
+        }
+    }
+    pub fn get_bound(&self) -> UpperBound {
+        self.values
+            .iter()
+            .map(|value| *value.lock().unwrap())
+            .min()
+            .unwrap()
+    }
+    pub fn refine_bound(&self, score: Score) -> bool {
+        let mut bound = self.values.last().unwrap().lock().unwrap();
+        if bound.is_improvement(&score) {
+            *bound = UpperBound::Finite(score);
+            true
+        } else {
+            false
+        }
+    }
+    pub fn branch(&self) -> Self {
+        let mut branch = self.clone();
+        branch.values.push(Arc::new(Mutex::new(UpperBound::PosInf)));
+        branch
     }
 }
