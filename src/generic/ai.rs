@@ -139,6 +139,20 @@ impl BoardData {
             return Err(());
         }
 
+        if depth >= max_depth {
+            return self.quiescence(
+                stop_check,
+                node_count,
+                board,
+                depth,
+                max_depth,
+                max_quiesce_depth,
+                max_node_count,
+                alpha,
+                beta,
+            );
+        }
+
         {
             let mut node_count_value = node_count.lock().unwrap();
             *node_count_value += 1;
@@ -158,89 +172,168 @@ impl BoardData {
                 })
             }
             Score::Heuristic(stand_pat) => {
-                if depth >= max_quiesce_depth {
-                    Ok(AlphaBetaMaximizingResult {
-                        score: self.get_evaluation(),
-                        depth: max_depth as isize - depth as isize,
-                        exact: true,
-                    })
-                } else {
-                    let quiesce = depth >= max_depth;
-
-                    macro_rules! get_score_and_beta_prune {
-                        ($move_data:expr) => {{
-                            let score = $move_data
-                                .alpha_beta(
-                                    stop_check,
-                                    node_count.clone(),
-                                    board,
-                                    depth + 1,
-                                    max_depth,
-                                    max_quiesce_depth,
-                                    max_node_count,
-                                    alpha.clone(),
-                                    beta.branch(),
-                                )?
-                                .score;
-                            if !beta.get_bound().is_improvement(&score) {
-                                //beta prune
-                                return Ok(AlphaBetaMaximizingResult {
-                                    score: score,
-                                    depth: max_depth as isize - depth as isize,
-                                    exact: false,
-                                });
-                            }
-                            score
-                        }};
-                    }
-
-                    let mut moves = self
-                        .get_moves_data_mut()
-                        .iter_mut()
-                        .filter(|move_data| match quiesce {
-                            true => match move_data.mv {
-                                Move::Standard {
-                                    piece,
-                                    victim: victim_opt,
-                                    promotion: promotion_opt,
-                                    from_sq,
-                                    to_sq,
-                                } => match victim_opt {
-                                    Some(victim) => {
-                                        alpha.get_bound().is_improvement(&Score::Heuristic(
-                                            stand_pat + victim.kind.worth().unwrap() * 1000 + 200, //delta prune
-                                        ))
-                                    }
-                                    None => false,
-                                },
-                            },
-                            false => true,
-                        })
-                        .collect::<Vec<_>>();
-                    if moves.len() == 0 {
-                        return Ok(AlphaBetaMaximizingResult {
-                            score: eval,
-                            depth: max_depth as isize - depth as isize,
-                            exact: true,
-                        });
-                    }
-                    moves.sort_by_key(|mv| mv.get_approx_score());
-                    debug_assert!(!moves.is_empty());
-                    let first_move_data = moves.pop().unwrap();
-                    let mut bestscore = get_score_and_beta_prune!(first_move_data);
-                    for move_data in moves.into_iter().rev() {
-                        let score = get_score_and_beta_prune!(move_data);
-                        if score > bestscore {
-                            bestscore = score;
-                            alpha.refine_bound(score);
+                macro_rules! get_score_and_beta_prune {
+                    ($move_data:expr) => {{
+                        let score = $move_data
+                            .alpha_beta(
+                                stop_check,
+                                node_count.clone(),
+                                board,
+                                depth + 1,
+                                max_depth,
+                                max_quiesce_depth,
+                                max_node_count,
+                                alpha.clone(),
+                                beta.branch(),
+                            )?
+                            .score;
+                        alpha.refine_bound(score);
+                        if !beta.get_bound().is_improvement(&score) {
+                            //beta prune
+                            return Ok(AlphaBetaMaximizingResult {
+                                score: score,
+                                depth: max_depth as isize - depth as isize,
+                                exact: false,
+                            });
                         }
+                        score
+                    }};
+                }
+
+                let mut moves = self.get_moves_data_mut().iter_mut().collect::<Vec<_>>();
+                moves.sort_by_key(|mv| mv.get_approx_score());
+                debug_assert!(!moves.is_empty());
+                let first_move_data = moves.pop().unwrap();
+                let mut bestscore = get_score_and_beta_prune!(first_move_data);
+                for move_data in moves.into_iter().rev() {
+                    let score = get_score_and_beta_prune!(move_data);
+                    if score > bestscore {
+                        bestscore = score;
                     }
-                    Ok(AlphaBetaMaximizingResult {
+                }
+                Ok(AlphaBetaMaximizingResult {
+                    score: bestscore,
+                    depth: max_depth as isize - depth as isize,
+                    exact: true,
+                })
+            }
+        }
+    }
+
+    fn quiescence(
+        &mut self,
+        stop_check: &impl Fn() -> bool,
+        node_count: Arc<Mutex<usize>>,
+        board: &mut Board,
+        depth: usize,
+        max_depth: usize,
+        max_quiesce_depth: usize,
+        max_node_count: usize,
+        alpha: LowerBoundRef,
+        beta: UpperBoundRef,
+    ) -> Result<AlphaBetaMaximizingResult, ()> {
+        if stop_check() {
+            return Err(());
+        }
+
+        {
+            let mut node_count_value = node_count.lock().unwrap();
+            *node_count_value += 1;
+            if *node_count_value > max_node_count {
+                return Err(());
+            }
+        }
+
+        let eval = self.get_evaluation();
+        if depth >= max_quiesce_depth {
+            return Ok(AlphaBetaMaximizingResult {
+                score: eval,
+                depth: max_depth as isize - depth as isize,
+                exact: true,
+            });
+        }
+        match eval {
+            Score::Lost(_) | Score::Draw(_) | Score::Won(_) => {
+                //board is terminal
+                Ok(AlphaBetaMaximizingResult {
+                    score: eval,
+                    depth: max_depth as isize - depth as isize,
+                    exact: true,
+                })
+            }
+            Score::Heuristic(stand_pat) => {
+                macro_rules! get_score_and_beta_prune {
+                    ($move_data:expr) => {{
+                        let score = $move_data
+                            .alpha_beta(
+                                stop_check,
+                                node_count.clone(),
+                                board,
+                                depth + 1,
+                                max_depth,
+                                max_quiesce_depth,
+                                max_node_count,
+                                alpha.clone(),
+                                beta.branch(),
+                            )?
+                            .score;
+                        alpha.refine_bound(score);
+                        if !beta.get_bound().is_improvement(&score) {
+                            //beta prune
+                            return Ok(AlphaBetaMaximizingResult {
+                                score: score,
+                                depth: max_depth as isize - depth as isize,
+                                exact: false,
+                            });
+                        }
+                        score
+                    }};
+                }
+
+                let mut bestscore = Score::Heuristic(stand_pat);
+                if !beta.get_bound().is_improvement(&bestscore) {
+                    //beta prune the stand_pat
+                    return Ok(AlphaBetaMaximizingResult {
                         score: bestscore,
                         depth: max_depth as isize - depth as isize,
-                        exact: true,
-                    })
+                        exact: false,
+                    });
                 }
+
+                let mut moves = self
+                    .get_moves_data_mut()
+                    .iter_mut()
+                    .filter(|move_data| match move_data.mv {
+                        Move::Standard {
+                            piece,
+                            victim: victim_opt,
+                            promotion: promotion_opt,
+                            from_sq,
+                            to_sq,
+                        } => match victim_opt {
+                            Some(victim) => {
+                                //delta prune
+                                true
+                                // alpha.get_bound().is_improvement(&Score::Heuristic(
+                                //     stand_pat + victim.kind.worth().unwrap() * 1000 + 200, //delta prune
+                                // ))
+                            }
+                            None => false,
+                        },
+                    })
+                    .collect::<Vec<_>>();
+                moves.sort_by_key(|mv| mv.get_approx_score());
+                for move_data in moves.into_iter().rev() {
+                    let score = get_score_and_beta_prune!(move_data);
+                    if score > bestscore {
+                        bestscore = score;
+                    }
+                }
+                Ok(AlphaBetaMaximizingResult {
+                    score: bestscore,
+                    depth: max_depth as isize - depth as isize,
+                    exact: true,
+                })
             }
         }
     }
@@ -306,7 +399,6 @@ impl BoardTree {
                         Ok(score) => {
                             let score = score.score;
                             println!("  {:?}/{:?}", idx + 1, n);
-                            let bound = alpha.get_bound();
                             alpha.refine_bound(score);
                             Ok((move_idx, score))
                         }

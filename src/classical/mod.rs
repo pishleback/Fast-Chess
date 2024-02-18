@@ -1,5 +1,4 @@
 use crate::generic::*;
-use colored::Colorize;
 use std::collections::HashMap;
 
 // pub mod terminal;

@@ -585,7 +585,7 @@ impl BoardData {
                                 score += signed_score!(piece.team, 300);
                             }
                             Some(3) => {
-                                score += signed_score!(piece.team, 100);
+                                score += signed_score!(piece.team, 25);
                             }
                             Some(4) => {
                                 score += signed_score!(piece.team, 20);
