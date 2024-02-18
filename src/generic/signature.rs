@@ -1,6 +1,16 @@
 use super::*;
 
 #[derive(Debug, Clone)]
+pub struct CastleSignature {
+    pub king_from: Square,
+    pub king_to: Square,
+    pub rook_from: Square,
+    pub rook_to: Square,
+    pub not_chcked: Vec<Square>, //in-between places where there cannot be check
+    pub not_occupied: Vec<Square>, //in-between places which must be empty
+}
+
+#[derive(Debug, Clone)]
 pub struct Signature {
     num: usize,
     flat_slides: Vec<Vec<Vec<Square>>>,
@@ -16,11 +26,21 @@ pub struct Signature {
     black_pawn_promotions: Vec<Option<Vec<PieceKind>>>,
     white_pawn_promotion_distance: Vec<Option<usize>>,
     black_pawn_promotion_distance: Vec<Option<usize>>,
+    white_castles: Vec<CastleSignature>,
+    black_castles: Vec<CastleSignature>,
 }
 
 impl Signature {
     pub fn num(&self) -> usize {
         self.num
+    }
+
+    pub fn get_castles(&self) -> Vec<(Team, &CastleSignature)> {
+        self.white_castles
+            .iter()
+            .map(|cs| (Team::White, cs))
+            .chain(self.black_castles.iter().map(|cs| (Team::Black, cs)))
+            .collect()
     }
 
     pub fn get_pawn_promotion_distance(&self, sq: Square, team: Team) -> Option<usize> {
@@ -83,6 +103,8 @@ impl Signature {
         pawn_moves: &dyn Fn(Team, Square) -> Vec<(Square, Vec<Square>)>,
         white_pawn_promotions: HashMap<Square, Vec<PieceKind>>,
         black_pawn_promotions: HashMap<Square, Vec<PieceKind>>,
+        white_castles: Vec<CastleSignature>,
+        black_castles: Vec<CastleSignature>,
     ) -> Self {
         //given a flat move from i to j, what are the possible following orthogonal flat moves
         let flat_nopp = |i: Square, j: Square| -> Vec<Square> {
@@ -309,6 +331,8 @@ impl Signature {
                 .collect(),
             white_pawn_promotion_distance,
             black_pawn_promotion_distance,
+            white_castles,
+            black_castles,
         }
     }
 

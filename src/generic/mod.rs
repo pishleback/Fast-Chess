@@ -65,7 +65,17 @@ pub struct Piece {
     pub moved: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl Piece {
+    fn moved(self) -> Self {
+        Self {
+            kind: self.kind,
+            team: self.team,
+            moved: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Move {
     Standard {
         piece: Piece,
@@ -73,6 +83,15 @@ pub enum Move {
         promotion: Option<PieceKind>,
         from_sq: Square,
         to_sq: Square,
+    },
+    Castle {
+        king_from: Square,
+        king_through: Vec<Square>,
+        king_to: Square,
+        king_piece: Piece,
+        rook_from: Square,
+        rook_to: Square,
+        rook_piece: Piece,
     },
 }
 
@@ -237,7 +256,7 @@ impl Board {
     }
 
     pub fn make_move(&mut self, m: Move) {
-        match m {
+        match &m {
             Move::Standard {
                 piece,
                 victim: victim_opt,
@@ -246,37 +265,68 @@ impl Board {
                 to_sq,
             } => {
                 debug_assert_eq!(piece.team, self.turn);
-                debug_assert_eq!(self.get_square(from_sq).unwrap(), piece);
+                debug_assert_eq!(self.get_square(*from_sq), Some(*piece));
                 self.good_pieces().remove(&from_sq);
                 match victim_opt {
                     Some(victim) => {
-                        debug_assert_eq!(self.get_square(to_sq).unwrap(), victim);
+                        debug_assert_eq!(self.get_square(*to_sq), Some(*victim));
                         debug_assert_ne!(victim.team, self.turn);
                         self.bad_pieces().remove(&to_sq);
                     }
                     None => {
-                        debug_assert!(self.get_square(to_sq).is_none());
+                        debug_assert!(self.get_square(*to_sq).is_none());
                     }
                 }
                 match promotion_opt {
                     Some(promotion) => {
                         self.good_pieces().insert(
-                            to_sq,
+                            *to_sq,
                             Piece {
-                                kind: promotion,
+                                kind: *promotion,
                                 team: piece.team,
                                 moved: true,
                             },
                         );
                     }
                     None => {
-                        self.good_pieces().insert(to_sq, piece);
+                        self.good_pieces().insert(*to_sq, piece.moved());
                     }
                 }
                 if piece.kind == PieceKind::King {
                     match piece.team {
-                        Team::White => self.white_king = to_sq,
-                        Team::Black => self.black_king = to_sq,
+                        Team::White => self.white_king = *to_sq,
+                        Team::Black => self.black_king = *to_sq,
+                    }
+                }
+            }
+            Move::Castle {
+                king_from,
+                king_through,
+                king_to,
+                king_piece,
+                rook_from,
+                rook_to,
+                rook_piece,
+            } => {
+                debug_assert_eq!(self.get_square(*king_from), Some(*king_piece));
+                for sq in king_through {
+                    debug_assert_eq!(self.get_square(*sq), None);
+                }
+                debug_assert_eq!(self.get_square(*king_to), None);
+                debug_assert_eq!(self.get_square(*rook_from), Some(*rook_piece));
+                debug_assert_eq!(self.get_square(*rook_to), None);
+                debug_assert_eq!(king_piece.team, self.turn);
+                debug_assert_eq!(rook_piece.team, self.turn);
+
+                self.good_pieces().remove(&king_from);
+                self.good_pieces().remove(&rook_from);
+                self.good_pieces().insert(*rook_to, rook_piece.moved());
+                self.good_pieces().insert(*king_to, king_piece.moved());
+
+                if king_piece.kind == PieceKind::King {
+                    match king_piece.team {
+                        Team::White => self.white_king = *king_to,
+                        Team::Black => self.black_king = *king_to,
                     }
                 }
             }
@@ -308,16 +358,16 @@ impl Board {
                         match promotion_opt {
                             Some(promotion) => {
                                 debug_assert_eq!(
-                                    self.get_square(to_sq).unwrap(),
-                                    Piece {
+                                    self.get_square(to_sq),
+                                    Some(Piece {
                                         team: piece.team,
                                         moved: piece.moved,
                                         kind: promotion
-                                    }
+                                    })
                                 );
                             }
                             None => {
-                                debug_assert_eq!(self.get_square(to_sq).unwrap(), piece);
+                                debug_assert_eq!(self.get_square(to_sq), Some(piece));
                             }
                         }
                         self.good_pieces().remove(&to_sq);
@@ -333,6 +383,38 @@ impl Board {
                             match piece.team {
                                 Team::White => self.white_king = from_sq,
                                 Team::Black => self.black_king = from_sq,
+                            }
+                        }
+                    }
+                    Move::Castle {
+                        king_from,
+                        king_through,
+                        king_to,
+                        king_piece,
+                        rook_from,
+                        rook_to,
+                        rook_piece,
+                    } => {
+                        debug_assert_eq!(self.get_square(king_to), Some(king_piece));
+                        for sq in &king_through {
+                            debug_assert_eq!(self.get_square(*sq), None);
+                        }
+                        debug_assert_eq!(self.get_square(king_from), None);
+
+                        debug_assert_eq!(self.get_square(rook_to), Some(rook_piece));
+                        debug_assert_eq!(self.get_square(rook_from), None);
+                        debug_assert_eq!(king_piece.team, self.turn);
+                        debug_assert_eq!(rook_piece.team, self.turn);
+
+                        self.good_pieces().remove(&rook_to);
+                        self.good_pieces().remove(&king_to);
+                        self.good_pieces().insert(rook_from, rook_piece);
+                        self.good_pieces().insert(king_from, king_piece);
+
+                        if king_piece.kind == PieceKind::King {
+                            match king_piece.team {
+                                Team::White => self.white_king = king_from,
+                                Team::Black => self.black_king = king_from,
                             }
                         }
                     }

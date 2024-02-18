@@ -82,6 +82,8 @@ pub struct GameInterface {
     board: Board,
     moves: Vec<Move>,
     board_ai: Option<generic::ai::AiOn>,
+    show_white_ai: bool,
+    show_black_ai: bool,
     // moves: Vec<generic::info::Move>,
     // best_move_idx: Option<MoveIdx>,
     move_buttons: Vec<MoveButton>,
@@ -138,7 +140,11 @@ impl Canvas for GameInterface {
         // let moves = info.get_moves(turn).clone();
         let board = create_game();
         let board_ai_off = generic::ai::AiOff::new(board.clone());
-        let moves = board_ai_off.get_moves();
+        let moves = board_ai_off
+            .get_moves()
+            .into_iter()
+            .map(|m| m.clone())
+            .collect();
         let board_ai = board_ai_off.start();
 
         Self {
@@ -148,6 +154,8 @@ impl Canvas for GameInterface {
             board,
             moves,
             board_ai: Some(board_ai),
+            show_white_ai: true,
+            show_black_ai: true,
             move_buttons: vec![],
             selected: None,
             textures: Textures::new(facade),
@@ -510,14 +518,27 @@ impl Canvas for GameInterface {
                     .unwrap();
             }
 
-            match self.board_ai.as_ref().unwrap().current_best_move() {
-                Some(m_idx) => {
-                    let m = self.moves[m_idx.idx];
-                    let squares = match m {
-                        Move::Standard { from_sq, to_sq, .. } => vec![from_sq, to_sq],
-                    };
-                    for square in squares.iter().map(|s| sq_to_grid(*s)) {
-                        target
+            if match self.board.get_turn() {
+                Team::White => self.show_white_ai,
+                Team::Black => self.show_black_ai,
+            } {
+                match self.board_ai.as_ref().unwrap().current_best_move() {
+                    Some(m_idx) => {
+                        let m = &self.moves[m_idx.idx];
+                        let squares = match m {
+                            Move::Standard { from_sq, to_sq, .. } => vec![from_sq, to_sq],
+                            Move::Castle {
+                                king_from,
+                                king_through,
+                                king_to,
+                                king_piece,
+                                rook_from,
+                                rook_to,
+                                rook_piece,
+                            } => vec![king_from, king_to],
+                        };
+                        for square in squares.into_iter().map(|s| sq_to_grid(*s)) {
+                            target
                     .draw(
                         &vertex_buffer,
                         &indices,
@@ -534,9 +555,10 @@ impl Canvas for GameInterface {
                         },
                     )
                     .unwrap();
+                        }
                     }
+                    None => {}
                 }
-                None => {}
             }
         }
 
@@ -614,6 +636,16 @@ impl Canvas for GameInterface {
                     ) => {
                         self.unmake_move();
                     }
+                    (
+                        glium::glutin::event::ElementState::Pressed,
+                        Some(glium::glutin::event::VirtualKeyCode::A),
+                    ) => {
+                        let val = match self.board.get_turn() {
+                            Team::White => &mut self.show_white_ai,
+                            Team::Black => &mut self.show_black_ai,
+                        };
+                        *val = !*val;
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -634,7 +666,7 @@ impl GameInterface {
                     .moves
                     .iter()
                     .enumerate()
-                    .map(|(idx, m)| (MoveIdx { idx }, *m))
+                    .map(|(idx, m)| (MoveIdx { idx }, m))
                 {
                     match m {
                         Move::Standard {
@@ -644,13 +676,30 @@ impl GameInterface {
                             from_sq,
                             to_sq,
                         } => {
-                            if grid_to_sq(pos.0, pos.1) == from_sq {
+                            if grid_to_sq(pos.0, pos.1) == *from_sq {
                                 self.move_buttons.push(MoveButton {
-                                    pos: sq_to_grid(to_sq),
+                                    pos: sq_to_grid(*to_sq),
                                     colour: match (victim_opt) {
                                         Some(_) => (1.0, 0.0, 0.0),
                                         None => (0.0, 0.5, 1.0),
                                     },
+                                    move_idx: m_idx,
+                                });
+                            }
+                        }
+                        Move::Castle {
+                            king_from,
+                            king_through,
+                            king_to,
+                            king_piece,
+                            rook_from,
+                            rook_to,
+                            rook_piece,
+                        } => {
+                            if grid_to_sq(pos.0, pos.1) == *king_from {
+                                self.move_buttons.push(MoveButton {
+                                    pos: sq_to_grid(*king_to),
+                                    colour: (0.0, 0.5, 1.0),
                                     move_idx: m_idx,
                                 });
                             }
@@ -667,7 +716,7 @@ impl GameInterface {
         let (mut ai_off, best_move) = self.board_ai.take().unwrap().finish();
         ai_off.make_move(m);
         self.board = ai_off.get_board().clone();
-        self.moves = ai_off.get_moves();
+        self.moves = ai_off.get_moves().into_iter().map(|m| m.clone()).collect();
         self.board_ai = Some(ai_off.start());
     }
 
@@ -676,7 +725,7 @@ impl GameInterface {
         let (mut ai_off, best_move) = self.board_ai.take().unwrap().finish();
         ai_off.unmake_move();
         self.board = ai_off.get_board().clone();
-        self.moves = ai_off.get_moves();
+        self.moves = ai_off.get_moves().into_iter().map(|m| m.clone()).collect();
         self.board_ai = Some(ai_off.start());
     }
 }

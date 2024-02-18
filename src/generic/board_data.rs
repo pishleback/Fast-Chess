@@ -339,6 +339,36 @@ impl PseudoMoves {
             }
         }
 
+        for (team, castle_signature) in board.signature.get_castles() {
+            if let (Some(king_piece), Some(rook_piece)) = (
+                board.get_square(castle_signature.king_from),
+                board.get_square(castle_signature.rook_from),
+            ) {
+                //note that king_piece may not actually be the king
+                if !king_piece.moved && !rook_piece.moved {
+                    if castle_signature
+                        .not_occupied
+                        .iter()
+                        .chain(vec![&castle_signature.king_to, &castle_signature.rook_to])
+                        .all(|sq| board.get_square(*sq).is_none())
+                    {
+                        add_move!(
+                            Move::Castle {
+                                king_from: castle_signature.king_from,
+                                king_through: castle_signature.not_chcked.clone(),
+                                king_to: castle_signature.king_to,
+                                king_piece: king_piece,
+                                rook_from: castle_signature.rook_from,
+                                rook_to: castle_signature.rook_to,
+                                rook_piece: rook_piece
+                            },
+                            team
+                        );
+                    }
+                }
+            }
+        }
+
         Self {
             white_pseudomoves,
             black_pseudomoves,
@@ -365,7 +395,7 @@ impl BoardData {
         let checkers = pseudomoves.get_vision(turn.flip(), board.get_king_square(turn));
         let is_check = !checkers.is_empty();
 
-        let is_illegal = |board: &mut Board, pseudo_move: Move| -> bool {
+        let is_illegal = |board: &mut Board, pseudo_move: &Move| -> bool {
             //pseudo_move is legal iff our king is not under attack after making pseudo_move
             match pseudo_move {
                 Move::Standard {
@@ -376,14 +406,14 @@ impl BoardData {
                     to_sq,
                 } => {
                     if piece.kind == PieceKind::King {
-                        let to_visions = pseudomoves.get_vision(turn.flip(), to_sq);
+                        let to_visions = pseudomoves.get_vision(turn.flip(), *to_sq);
                         if !to_visions.is_empty() {
                             return true; //illegal move because we are moving into check
                         }
                         if is_check {
                             //moving the king and currently in check
                             //need to check whether we are moving into a check obscured by ourself
-                            let from_visions = pseudomoves.get_vision(turn.flip(), from_sq);
+                            let from_visions = pseudomoves.get_vision(turn.flip(), *from_sq);
                             for from_vision in from_visions {
                                 match from_vision {
                                     Vision::Teleport { piece, from } => {}
@@ -395,7 +425,7 @@ impl BoardData {
                                     } => {
                                         if *slide_idx < slide.len() - 1 {
                                             let danger_sq = slide[slide_idx + 1];
-                                            if to_sq == danger_sq {
+                                            if *to_sq == danger_sq {
                                                 return true; //illegal move because we are moving into a check which was obscured by ourself
                                             }
                                         }
@@ -409,8 +439,8 @@ impl BoardData {
                     } else {
                         //find all pieces we are pinned by
                         let mut pinners = vec![];
-                        board.make_move(pseudo_move);
-                        for pinner_vis in pseudomoves.get_vision(turn.flip(), from_sq) {
+                        board.make_move(pseudo_move.clone());
+                        for pinner_vis in pseudomoves.get_vision(turn.flip(), *from_sq) {
                             match pinner_vis {
                                 Vision::Teleport { piece, from } => {}
                                 Vision::Slide {
@@ -449,7 +479,7 @@ impl BoardData {
                                         slide: pinner_slide,
                                         slide_idx: pinner_slide_idx,
                                     } => {
-                                        if to_sq == *pinner_from {
+                                        if to_sq == pinner_from {
                                             debug_assert_eq!(victim_opt.unwrap(), *pinner_piece);
                                         } else {
                                             return true; //we are not taking the pinner piece, so this move is illegal
@@ -483,8 +513,8 @@ impl BoardData {
                                                     slide_idx: checking_slide_idx,
                                                 } => (checking_piece, checking_from),
                                             };
-                                        if to_sq == *checking_from {
-                                            debug_assert_eq!(victim, *checking_piece);
+                                        if to_sq == checking_from {
+                                            debug_assert_eq!(victim, checking_piece);
                                             return false; //taking a unique checking piece is legal
                                         }
                                     }
@@ -510,7 +540,7 @@ impl BoardData {
                                     slide_idx: checking_slide_idx,
                                 } => (0..*checking_slide_idx)
                                     .map(|block_idx| checking_slide[block_idx])
-                                    .any(|block_sq| block_sq == to_sq),
+                                    .any(|block_sq| block_sq == *to_sq),
                             }) {
                                 //the move blocks all checking sliders so is legal
                                 false
@@ -523,18 +553,41 @@ impl BoardData {
                         }
                     }
                 }
+                Move::Castle {
+                    king_from,
+                    king_through,
+                    king_to,
+                    king_piece,
+                    rook_from,
+                    rook_to,
+                    rook_piece,
+                } => {
+                    if king_piece.kind == PieceKind::King {
+                        //castling with a king
+                        //musn't be in check, moving through check, or end in check
+                        for sq in king_through.into_iter().chain(vec![king_from, king_to]) {
+                            if !pseudomoves.get_vision(turn.flip(), *sq).is_empty() {
+                                return true;
+                            }
+                        }
+                        false
+                    } else {
+                        //castling with something else e.g. prince
+                        true
+                    }
+                }
             }
         };
 
         let mut moves: Vec<Move> = vec![];
         for pseudo_move in pseudomoves.get_pseudomoves(turn) {
             //compute whether pseudo_move is legal is not
-            let illegal = is_illegal(board, *pseudo_move);
+            let illegal = is_illegal(board, pseudo_move);
 
             if cfg!(debug_assertions) {
                 //check that the fast check calculation is valid
                 let mut test_board = board.clone();
-                test_board.make_move(*pseudo_move);
+                test_board.make_move(pseudo_move.clone());
                 let test_board_pseudomoves = PseudoMoves::new(&test_board);
                 let king_square = test_board.get_king_square(turn);
                 let test_illegal = !test_board_pseudomoves
@@ -550,7 +603,7 @@ impl BoardData {
             }
 
             if !illegal {
-                moves.push(*pseudo_move);
+                moves.push(pseudo_move.clone());
             }
         }
 
@@ -679,7 +732,7 @@ impl BoardData {
         &mut self.moves
     }
 
-    pub fn get_moves(&self) -> Vec<Move> {
+    pub fn get_moves(&self) -> Vec<&Move> {
         self.moves
             .iter()
             .map(|move_data| (move_data.get_move()))

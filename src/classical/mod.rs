@@ -1,6 +1,8 @@
 use crate::generic::*;
 use std::collections::HashMap;
 
+use self::signature::CastleSignature;
+
 // pub mod terminal;
 pub mod graphical;
 
@@ -114,6 +116,42 @@ pub fn create_signature() -> signature::Signature {
             })
             .into_iter()
             .collect(),
+        vec![
+            CastleSignature {
+                king_from: grid_to_sq(4, 0),
+                king_to: grid_to_sq(2, 0),
+                rook_from: grid_to_sq(0, 0),
+                rook_to: grid_to_sq(3, 0),
+                not_chcked: vec![grid_to_sq(3, 0)],
+                not_occupied: vec![grid_to_sq(1, 0)],
+            },
+            CastleSignature {
+                king_from: grid_to_sq(4, 0),
+                king_to: grid_to_sq(6, 0),
+                rook_from: grid_to_sq(7, 0),
+                rook_to: grid_to_sq(5, 0),
+                not_chcked: vec![grid_to_sq(5, 0)],
+                not_occupied: vec![],
+            },
+        ],
+        vec![
+            CastleSignature {
+                king_from: grid_to_sq(4, 7),
+                king_to: grid_to_sq(2, 7),
+                rook_from: grid_to_sq(0, 7),
+                rook_to: grid_to_sq(3, 7),
+                not_chcked: vec![grid_to_sq(3, 7)],
+                not_occupied: vec![grid_to_sq(1, 7)],
+            },
+            CastleSignature {
+                king_from: grid_to_sq(4, 7),
+                king_to: grid_to_sq(6, 7),
+                rook_from: grid_to_sq(7, 7),
+                rook_to: grid_to_sq(5, 7),
+                not_chcked: vec![grid_to_sq(5, 7)],
+                not_occupied: vec![],
+            },
+        ],
     )
 }
 

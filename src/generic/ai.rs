@@ -67,8 +67,8 @@ impl MoveData {
         }
     }
 
-    pub fn get_move(&self) -> Move {
-        self.mv
+    pub fn get_move(&self) -> &Move {
+        &self.mv
     }
 
     fn get_board(&mut self, board: &mut Board) -> &mut BoardData {
@@ -97,7 +97,15 @@ impl MoveData {
         alpha: LowerBoundRef,
         beta: UpperBoundRef,
     ) -> Result<AlphaBetaMinimizingResult, ()> {
-        board.make_move(self.mv);
+        {
+            let mut node_count_value = node_count.lock().unwrap();
+            *node_count_value += 1;
+            if *node_count_value > max_node_count {
+                return Err(());
+            }
+        }
+
+        board.make_move(self.mv.clone());
         let board_data = self.get_board(board);
         if let Ok(abres) = board_data.alpha_beta(
             stop_check,
@@ -151,14 +159,6 @@ impl BoardData {
                 alpha,
                 beta,
             );
-        }
-
-        {
-            let mut node_count_value = node_count.lock().unwrap();
-            *node_count_value += 1;
-            if *node_count_value > max_node_count {
-                return Err(());
-            }
         }
 
         let eval = self.get_evaluation();
@@ -303,7 +303,7 @@ impl BoardData {
                 let mut moves = self
                     .get_moves_data_mut()
                     .iter_mut()
-                    .filter(|move_data| match move_data.mv {
+                    .filter(|move_data| match &move_data.mv {
                         Move::Standard {
                             piece,
                             victim: victim_opt,
@@ -320,6 +320,15 @@ impl BoardData {
                             }
                             None => false,
                         },
+                        Move::Castle {
+                            king_from,
+                            king_through,
+                            king_to,
+                            king_piece,
+                            rook_from,
+                            rook_to,
+                            rook_piece,
+                        } => false,
                     })
                     .collect::<Vec<_>>();
                 moves.sort_by_key(|mv| mv.get_approx_score());
@@ -425,7 +434,7 @@ impl BoardTree {
 
     pub fn make_move(&mut self, m: MoveIdx) {
         let md = self.root.get_move_mut(m);
-        self.board.make_move(md.mv);
+        self.board.make_move(md.mv.clone());
         self.root = match &md.board {
             Some(board) => board.clone(),
             None => md.get_board(&mut self.board).clone(),
@@ -459,7 +468,7 @@ impl AiOn {
         let mut depth = 1;
         println!("Search started");
         loop {
-            match tree.best_move_at_depth(depth - 1, depth * 2 - 1, 3000000, stop_flag.clone()) {
+            match tree.best_move_at_depth(depth - 1, depth * 3 - 1, 3000000, stop_flag.clone()) {
                 Ok(None) => {
                     println!("No moves");
                     break;
@@ -508,7 +517,7 @@ impl AiOff {
         &self.tree.board
     }
 
-    pub fn get_moves(&self) -> Vec<Move> {
+    pub fn get_moves(&self) -> Vec<&Move> {
         self.tree.root.get_moves()
     }
 
