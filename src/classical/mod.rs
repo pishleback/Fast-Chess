@@ -159,7 +159,7 @@ pub fn create_game() -> Board {
     //white team
     let mut white_pieces = HashMap::new();
     for x in 0..8u8 {
-        white_pieces.insert(grid_to_sq(x, 1), PieceKind::Pawn);
+        white_pieces.insert(grid_to_sq(x, 1), PieceKind::Pawn(EnCroissantable::No));
     }
     white_pieces.insert(grid_to_sq(0, 0), PieceKind::Rook);
     white_pieces.insert(grid_to_sq(1, 0), PieceKind::Knight);
@@ -173,7 +173,7 @@ pub fn create_game() -> Board {
     //black team
     let mut black_pieces = HashMap::new();
     for x in 0..8u8 {
-        black_pieces.insert(grid_to_sq(x, 6), PieceKind::Pawn);
+        black_pieces.insert(grid_to_sq(x, 6), PieceKind::Pawn(EnCroissantable::No));
     }
     black_pieces.insert(grid_to_sq(0, 7), PieceKind::Rook);
     black_pieces.insert(grid_to_sq(1, 7), PieceKind::Knight);

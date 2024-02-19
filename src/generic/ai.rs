@@ -305,9 +305,9 @@ impl BoardData {
                     .iter_mut()
                     .filter(|move_data| match &move_data.mv {
                         Move::Standard {
-                            piece,
+                            from_piece,
+                            to_piece,
                             victim: victim_opt,
-                            promotion: promotion_opt,
                             from_sq,
                             to_sq,
                         } => match victim_opt {
@@ -328,6 +328,13 @@ impl BoardData {
                             rook_from,
                             rook_to,
                             rook_piece,
+                        } => false,
+                        Move::EnCroissant {
+                            pawn,
+                            pawn_from,
+                            pawn_to,
+                            victim,
+                            victim_sq,
                         } => false,
                     })
                     .collect::<Vec<_>>();

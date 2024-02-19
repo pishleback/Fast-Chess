@@ -379,7 +379,7 @@ impl Canvas for GameInterface {
                 let tex = match piece {
                     Piece {
                         team: Team::White,
-                        kind: PieceKind::Pawn,
+                        kind: PieceKind::Pawn(..),
                         ..
                     } => &self.textures.white_pawn,
                     Piece {
@@ -409,7 +409,7 @@ impl Canvas for GameInterface {
                     } => &self.textures.white_king,
                     Piece {
                         team: Team::Black,
-                        kind: PieceKind::Pawn,
+                        kind: PieceKind::Pawn(..),
                         ..
                     } => &self.textures.black_pawn,
                     Piece {
@@ -536,6 +536,13 @@ impl Canvas for GameInterface {
                                 rook_to,
                                 rook_piece,
                             } => vec![king_from, king_to],
+                            Move::EnCroissant {
+                                pawn,
+                                pawn_from,
+                                pawn_to,
+                                victim,
+                                victim_sq,
+                            } => vec![pawn_from, pawn_to],
                         };
                         for square in squares.into_iter().map(|s| sq_to_grid(*s)) {
                             target
@@ -670,9 +677,9 @@ impl GameInterface {
                 {
                     match m {
                         Move::Standard {
-                            piece,
+                            from_piece,
+                            to_piece,
                             victim: victim_opt,
-                            promotion: promotion_opt,
                             from_sq,
                             to_sq,
                         } => {
@@ -700,6 +707,21 @@ impl GameInterface {
                                 self.move_buttons.push(MoveButton {
                                     pos: sq_to_grid(*king_to),
                                     colour: (0.0, 0.5, 1.0),
+                                    move_idx: m_idx,
+                                });
+                            }
+                        }
+                        Move::EnCroissant {
+                            pawn,
+                            pawn_from,
+                            pawn_to,
+                            victim,
+                            victim_sq,
+                        } => {
+                            if grid_to_sq(pos.0, pos.1) == *pawn_from {
+                                self.move_buttons.push(MoveButton {
+                                    pos: sq_to_grid(*pawn_to),
+                                    colour: (1.0, 0.0, 0.0),
                                     move_idx: m_idx,
                                 });
                             }
