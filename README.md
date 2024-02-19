@@ -1,1 +1,1 @@
-A chess GUI and AI written in rust
+An OPenGL chess GUI and multithreaded AI which is better than me, written using rust.
