@@ -255,7 +255,6 @@ impl Signature {
                         }
                         let mut new_frontier = HashSet::new();
                         for frontier_sq in frontier {
-                            println!("{:?} {:?}", frontier_sq, pawn_moves.get(&frontier_sq));
                             for new_frontier_sq in pawn_moves.get(&frontier_sq).unwrap() {
                                 new_frontier.insert(*new_frontier_sq);
                             }
@@ -296,8 +295,6 @@ impl Signature {
                 .collect(),
             black_pawn_promotions.keys().cloned().collect(),
         );
-
-        println!("{:?}", black_pawn_promotion_distance);
 
         Self {
             num,

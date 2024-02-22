@@ -71,6 +71,40 @@ impl Textures {
     }
 }
 
+//include_bytes! version
+
+// fn load_texture<const N: usize>(
+//     facade: &impl glium::backend::Facade,
+//     data: &'static [u8; N],
+// ) -> glium::texture::Texture2d {
+//     let image = image::load(std::io::Cursor::new(data), image::ImageFormat::Png)
+//         .unwrap()
+//         .to_rgba8();
+//     let image_dimensions = image.dimensions();
+//     let image =
+//         glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_dimensions);
+//     glium::texture::Texture2d::new(facade, image).unwrap()
+// }
+
+// impl Textures {
+//     fn new(facade: &impl glium::backend::Facade) -> Self {
+//         Self {
+//             white_pawn: load_texture(facade, include_bytes!("icons/white pawn.png")),
+//             white_rook: load_texture(facade, include_bytes!("icons/white rook.png")),
+//             white_knight: load_texture(facade, include_bytes!("icons/white knight.png")),
+//             white_bishop: load_texture(facade, include_bytes!("icons/white bishop.png")),
+//             white_queen: load_texture(facade, include_bytes!("icons/white queen.png")),
+//             white_king: load_texture(facade, include_bytes!("icons/white king.png")),
+//             black_pawn: load_texture(facade, include_bytes!("icons/black pawn.png")),
+//             black_rook: load_texture(facade, include_bytes!("icons/black rook.png")),
+//             black_knight: load_texture(facade, include_bytes!("icons/black knight.png")),
+//             black_bishop: load_texture(facade, include_bytes!("icons/black bishop.png")),
+//             black_queen: load_texture(facade, include_bytes!("icons/black queen.png")),
+//             black_king: load_texture(facade, include_bytes!("icons/black king.png")),
+//         }
+//     }
+// }
+
 struct MoveButton {
     pos: (u8, u8),
     colour: (f32, f32, f32),
