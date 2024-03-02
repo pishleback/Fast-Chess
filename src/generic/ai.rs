@@ -1,10 +1,6 @@
-use std::cell::RefCell;
-use std::cmp::max;
 use std::ops::Neg;
-use std::os::windows::thread;
 use std::sync::{Arc, Mutex};
-use std::thread::{sleep_ms, JoinHandle, Thread};
-use std::time::Duration;
+use std::thread::JoinHandle;
 
 use super::board_data::*;
 use super::score::*;
@@ -118,11 +114,11 @@ impl MoveData {
             -beta,
             -alpha,
         ) {
-            board.unmake_move();
+            board.unmake_move().unwrap();
             self.approx_score = Some(-abres);
             Ok(-abres)
         } else {
-            board.unmake_move();
+            board.unmake_move().unwrap();
             Err(())
         }
     }
@@ -171,7 +167,7 @@ impl BoardData {
                     exact: true,
                 })
             }
-            Score::Heuristic(stand_pat) => {
+            Score::Heuristic(_stand_pat) => {
                 macro_rules! get_score_and_beta_prune {
                     ($move_data:expr) => {{
                         let score = $move_data
@@ -305,13 +301,9 @@ impl BoardData {
                     .iter_mut()
                     .filter(|move_data| match &move_data.mv {
                         Move::Standard {
-                            from_piece,
-                            to_piece,
-                            victim: victim_opt,
-                            from_sq,
-                            to_sq,
+                            victim: victim_opt, ..
                         } => match victim_opt {
-                            Some(victim) => {
+                            Some(_) => {
                                 //delta prune
                                 true
                                 // alpha.get_bound().is_improvement(&Score::Heuristic(
@@ -320,22 +312,8 @@ impl BoardData {
                             }
                             None => false,
                         },
-                        Move::Castle {
-                            king_from,
-                            king_through,
-                            king_to,
-                            king_piece,
-                            rook_from,
-                            rook_to,
-                            rook_piece,
-                        } => false,
-                        Move::EnCroissant {
-                            pawn,
-                            pawn_from,
-                            pawn_to,
-                            victim,
-                            victim_sq,
-                        } => false,
+                        Move::Castle { .. } => false,
+                        Move::EnCroissant { .. } => false,
                     })
                     .collect::<Vec<_>>();
                 moves.sort_by_key(|mv| mv.get_approx_score());
@@ -382,7 +360,7 @@ impl BoardTree {
             .enumerate()
             .map(|(idx, mv)| (MoveIdx { idx }, mv, self.board.clone()))
             .collect::<Vec<_>>();
-        moves.sort_by_key(|(mv_idx, mv, board)| mv.get_approx_score());
+        moves.sort_by_key(|(_mv_idx, mv, _board)| mv.get_approx_score());
         let n = moves.len();
         if n == 0 {
             Ok(None)
@@ -430,7 +408,7 @@ impl BoardTree {
                     .into_iter()
                     .map(|result| result.unwrap())
                     .collect::<Vec<_>>();
-                if let Some(best) = scores.into_iter().max_by_key(|(move_idx, score)| *score) {
+                if let Some(best) = scores.into_iter().max_by_key(|(_move_idx, score)| *score) {
                     Ok(Some((best.0, best.1, *node_count.lock().unwrap())))
                 } else {
                     Ok(None)

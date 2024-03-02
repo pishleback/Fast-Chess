@@ -411,7 +411,7 @@ impl Board {
                     }
                     Move::Castle {
                         king_from,
-                        king_through,
+                        king_through: _,
                         king_to,
                         king_piece,
                         rook_from,

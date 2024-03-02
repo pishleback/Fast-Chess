@@ -1,9 +1,7 @@
 use std::{
-    ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign},
+    ops::Neg,
     sync::{Arc, Mutex},
 };
-
-use super::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Score {
@@ -11,8 +9,6 @@ pub enum Score {
     Lost(usize),
     Draw(usize),
     Won(usize),
-    // NegInf,
-    // PosInf,
 }
 
 impl PartialOrd for Score {
@@ -23,12 +19,6 @@ impl PartialOrd for Score {
 impl Ord for Score {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
-            // (Score::NegInf, Score::NegInf) => std::cmp::Ordering::Equal,
-            // (Score::PosInf, Score::PosInf) => std::cmp::Ordering::Equal,
-            // (Score::NegInf, _) => std::cmp::Ordering::Less,
-            // (Score::PosInf, _) => std::cmp::Ordering::Greater,
-            // (_, Score::NegInf) => std::cmp::Ordering::Greater,
-            // (_, Score::PosInf) => std::cmp::Ordering::Less,
             (Score::Lost(a), Score::Lost(b)) => a.cmp(b),
             (Score::Won(a), Score::Won(b)) => a.cmp(b).reverse(),
             (Score::Lost(_), _) => std::cmp::Ordering::Less,
@@ -52,8 +42,6 @@ impl Neg for Score {
             Score::Lost(n) => Score::Won(n),
             Score::Draw(n) => Score::Draw(n),
             Score::Won(n) => Score::Lost(n),
-            // Score::NegInf => Score::PosInf,
-            // Score::PosInf => Score::NegInf,
         }
     }
 }
@@ -94,8 +82,8 @@ impl Ord for LowerBound {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
             (LowerBound::Finite(a), LowerBound::Finite(b)) => a.cmp(b),
-            (LowerBound::Finite(a), LowerBound::NegInf) => std::cmp::Ordering::Greater,
-            (LowerBound::NegInf, LowerBound::Finite(b)) => std::cmp::Ordering::Less,
+            (LowerBound::Finite(_), LowerBound::NegInf) => std::cmp::Ordering::Greater,
+            (LowerBound::NegInf, LowerBound::Finite(_)) => std::cmp::Ordering::Less,
             (LowerBound::NegInf, LowerBound::NegInf) => std::cmp::Ordering::Equal,
         }
     }
@@ -137,8 +125,8 @@ impl Ord for UpperBound {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
             (UpperBound::Finite(a), UpperBound::Finite(b)) => a.cmp(b),
-            (UpperBound::Finite(a), UpperBound::PosInf) => std::cmp::Ordering::Less,
-            (UpperBound::PosInf, UpperBound::Finite(b)) => std::cmp::Ordering::Greater,
+            (UpperBound::Finite(_), UpperBound::PosInf) => std::cmp::Ordering::Less,
+            (UpperBound::PosInf, UpperBound::Finite(_)) => std::cmp::Ordering::Greater,
             (UpperBound::PosInf, UpperBound::PosInf) => std::cmp::Ordering::Equal,
         }
     }

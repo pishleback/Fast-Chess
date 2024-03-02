@@ -266,7 +266,7 @@ impl PseudoMoves {
             .iter()
             .chain(board.black_pieces.iter())
             .collect();
-        all_pieces.sort_by_key(|(s, p)| s.idx);
+        all_pieces.sort_by_key(|(s, _p)| s.idx);
 
         let mut crossant_map = HashMap::new();
         for (sq, piece) in &all_pieces {
@@ -474,12 +474,9 @@ impl BoardData {
                             let from_visions = pseudomoves.get_vision(turn.flip(), *from_sq);
                             for from_vision in from_visions {
                                 match from_vision {
-                                    Vision::Teleport { piece, from } => {}
+                                    Vision::Teleport { .. } => {}
                                     Vision::Slide {
-                                        piece,
-                                        from,
-                                        slide,
-                                        slide_idx,
+                                        slide, slide_idx, ..
                                     } => {
                                         if *slide_idx < slide.len() - 1 {
                                             let danger_sq = slide[slide_idx + 1];
@@ -500,12 +497,12 @@ impl BoardData {
                         board.make_move(pseudo_move.clone());
                         for pinner_vis in pseudomoves.get_vision(turn.flip(), *from_sq) {
                             match pinner_vis {
-                                Vision::Teleport { piece, from } => {}
+                                Vision::Teleport { .. } => {}
                                 Vision::Slide {
-                                    piece: pinner_piece,
-                                    from: pinner_from,
+                                    piece: _pinner_piece,
+                                    from: _pinner_from,
                                     slide: pinner_slide,
-                                    slide_idx: pinner_slide_idx,
+                                    slide_idx: _pinner_slide_idx,
                                 } => {
                                     'PIN_LOOP: for danger_sq in pinner_slide {
                                         //compute whether we are in check after making pseudomove
@@ -522,7 +519,7 @@ impl BoardData {
                                 }
                             }
                         }
-                        board.unmake_move();
+                        board.unmake_move().unwrap();
                         match pinners.len() {
                             0 => {
                                 //not pinned
@@ -530,12 +527,12 @@ impl BoardData {
                             1 => {
                                 //pinned by one piece. Legal iff we are taking it
                                 match pinners[0] {
-                                    Vision::Teleport { piece, from } => panic!(),
+                                    Vision::Teleport { .. } => panic!(),
                                     Vision::Slide {
                                         piece: pinner_piece,
                                         from: pinner_from,
-                                        slide: pinner_slide,
-                                        slide_idx: pinner_slide_idx,
+                                        slide: _pinner_slide,
+                                        slide_idx: _pinner_slide_idx,
                                     } => {
                                         if to_sq == pinner_from {
                                             debug_assert_eq!(victim_opt.unwrap(), *pinner_piece);
@@ -567,8 +564,8 @@ impl BoardData {
                                                 Vision::Slide {
                                                     piece: checking_piece,
                                                     from: checking_from,
-                                                    slide: checking_slide,
-                                                    slide_idx: checking_slide_idx,
+                                                    slide: _checking_slide,
+                                                    slide_idx: _checking_slide_idx,
                                                 } => (checking_piece, checking_from),
                                             };
                                         if to_sq == checking_from {
@@ -592,8 +589,8 @@ impl BoardData {
                             if checkers.iter().all(|checker| match checker {
                                 Vision::Teleport { .. } => panic!(),
                                 Vision::Slide {
-                                    piece: checking_piece,
-                                    from: checking_from,
+                                    piece: _checking_piece,
+                                    from: _checking_from,
                                     slide: checking_slide,
                                     slide_idx: checking_slide_idx,
                                 } => (0..*checking_slide_idx)
@@ -616,9 +613,7 @@ impl BoardData {
                     king_through,
                     king_to,
                     king_piece,
-                    rook_from,
-                    rook_to,
-                    rook_piece,
+                    ..
                 } => {
                     if king_piece.kind == PieceKind::King {
                         //castling with a king
@@ -634,13 +629,7 @@ impl BoardData {
                         true
                     }
                 }
-                Move::EnCroissant {
-                    pawn,
-                    pawn_from,
-                    pawn_to,
-                    victim,
-                    victim_sq,
-                } => {
+                Move::EnCroissant { .. } => {
                     false //todo
                 }
             }
@@ -663,7 +652,7 @@ impl BoardData {
                         let test_illegal = !test_board_pseudomoves
                             .get_vision(turn.flip(), king_square)
                             .is_empty();
-                        test_board.unmake_move();
+                        test_board.unmake_move().unwrap();
                         if test_illegal != illegal {
                             println!("NUM = {:?}", board.get_move_num());
                             println!("MOVES = {:#?}", board.moves);
@@ -739,20 +728,15 @@ impl BoardData {
                     let sq = Square { idx: sq_idx };
                     for vision in visions {
                         let from_piece = match &vision {
-                            Vision::Teleport { piece, from } => piece,
-                            Vision::Slide {
-                                piece,
-                                from,
-                                slide,
-                                slide_idx,
-                            } => piece,
+                            Vision::Teleport { piece, .. } => piece,
+                            Vision::Slide { piece, .. } => piece,
                         };
                         if from_piece.kind != PieceKind::King {
                             let from_worth = from_piece.kind.worth().unwrap();
                             match board.get_square(sq) {
                                 Some(to_piece) => {
                                     if to_piece.kind != PieceKind::King {
-                                        let to_worth = to_piece.kind.worth();
+                                        let _to_worth = to_piece.kind.worth();
                                         if to_piece.team == from_piece.team {
                                             //defend
                                         } else {

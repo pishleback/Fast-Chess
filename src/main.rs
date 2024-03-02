@@ -5,5 +5,5 @@ pub mod generic;
 pub mod graphical;
 
 fn main() {
-    classical::graphical::GameInterface::run(|g| {});
+    classical::graphical::GameInterface::run(|_g| {});
 }

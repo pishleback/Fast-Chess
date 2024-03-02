@@ -230,7 +230,7 @@ impl Signature {
 
         let pawn_attacks = |team, sq| -> Vec<Square> {
             let mut sqs = vec![];
-            for (m1, m2s) in pawn_moves(team, sq) {
+            for (m1, _m2s) in pawn_moves(team, sq) {
                 for a in flat_nopp(sq, m1) {
                     sqs.push(a);
                 }
@@ -274,7 +274,7 @@ impl Signature {
                     (sq, {
                         pawn_moves(Team::White, sq)
                             .into_iter()
-                            .map(|(first, seconds)| first)
+                            .map(|(first, _seconds)| first)
                             .collect::<Vec<_>>()
                     })
                 })
@@ -288,7 +288,7 @@ impl Signature {
                     (sq, {
                         pawn_moves(Team::Black, sq)
                             .into_iter()
-                            .map(|(first, seconds)| first)
+                            .map(|(first, _seconds)| first)
                             .collect::<Vec<_>>()
                     })
                 })

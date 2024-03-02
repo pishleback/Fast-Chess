@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use glium::glutin::event::ElementState;
 use glium::{implement_vertex, uniform, Program, Surface};
 
@@ -354,7 +352,10 @@ impl Canvas for GameInterface {
         }
     }
 
-    fn tick(&mut self, state: &crate::graphical::State, dt: f64) {}
+    fn tick(&mut self, state: &crate::graphical::State, dt: f64) {
+        let _ = &state;
+        let _ = &dt;
+    }
 
     fn draw(&mut self, state: &crate::graphical::State, display: &glium::Display) {
         let mut target = display.draw();
@@ -562,20 +563,10 @@ impl Canvas for GameInterface {
                         let squares = match m {
                             Move::Standard { from_sq, to_sq, .. } => vec![from_sq, to_sq],
                             Move::Castle {
-                                king_from,
-                                king_through,
-                                king_to,
-                                king_piece,
-                                rook_from,
-                                rook_to,
-                                rook_piece,
+                                king_from, king_to, ..
                             } => vec![king_from, king_to],
                             Move::EnCroissant {
-                                pawn,
-                                pawn_from,
-                                pawn_to,
-                                victim,
-                                victim_sq,
+                                pawn_from, pawn_to, ..
                             } => vec![pawn_from, pawn_to],
                         };
                         for square in squares.into_iter().map(|s| sq_to_grid(*s)) {
@@ -612,7 +603,10 @@ impl Canvas for GameInterface {
         ev: &glium::glutin::event::Event<'_, ()>,
     ) {
         match ev {
-            glium::glutin::event::Event::DeviceEvent { device_id, event } => match event {
+            glium::glutin::event::Event::DeviceEvent {
+                device_id: _,
+                event,
+            } => match event {
                 glium::glutin::event::DeviceEvent::Button { button, state } => {
                     match (button, state) {
                         (1, ElementState::Pressed) => {
@@ -702,7 +696,7 @@ impl GameInterface {
         self.move_buttons = vec![];
         match self.selected {
             Some(pos) => {
-                let sq = grid_to_sq(pos.0, pos.1);
+                // let sq = grid_to_sq(pos.0, pos.1);
                 for (m_idx, m) in self
                     .moves
                     .iter()
@@ -711,16 +705,15 @@ impl GameInterface {
                 {
                     match m {
                         Move::Standard {
-                            from_piece,
-                            to_piece,
                             victim: victim_opt,
                             from_sq,
                             to_sq,
+                            ..
                         } => {
                             if grid_to_sq(pos.0, pos.1) == *from_sq {
                                 self.move_buttons.push(MoveButton {
                                     pos: sq_to_grid(*to_sq),
-                                    colour: match (victim_opt) {
+                                    colour: match victim_opt {
                                         Some(_) => (1.0, 0.0, 0.0),
                                         None => (0.0, 0.5, 1.0),
                                     },
@@ -729,13 +722,7 @@ impl GameInterface {
                             }
                         }
                         Move::Castle {
-                            king_from,
-                            king_through,
-                            king_to,
-                            king_piece,
-                            rook_from,
-                            rook_to,
-                            rook_piece,
+                            king_from, king_to, ..
                         } => {
                             if grid_to_sq(pos.0, pos.1) == *king_from {
                                 self.move_buttons.push(MoveButton {
@@ -746,11 +733,7 @@ impl GameInterface {
                             }
                         }
                         Move::EnCroissant {
-                            pawn,
-                            pawn_from,
-                            pawn_to,
-                            victim,
-                            victim_sq,
+                            pawn_from, pawn_to, ..
                         } => {
                             if grid_to_sq(pos.0, pos.1) == *pawn_from {
                                 self.move_buttons.push(MoveButton {
@@ -769,7 +752,7 @@ impl GameInterface {
 
     fn make_move(&mut self, m: MoveIdx) {
         self.set_selected(None);
-        let (mut ai_off, best_move) = self.board_ai.take().unwrap().finish();
+        let (mut ai_off, _best_move) = self.board_ai.take().unwrap().finish();
         ai_off.make_move(m);
         self.board = ai_off.get_board().clone();
         self.moves = ai_off.get_moves().into_iter().map(|m| m.clone()).collect();
@@ -778,8 +761,8 @@ impl GameInterface {
 
     fn unmake_move(&mut self) {
         self.set_selected(None);
-        let (mut ai_off, best_move) = self.board_ai.take().unwrap().finish();
-        ai_off.unmake_move();
+        let (mut ai_off, _best_move) = self.board_ai.take().unwrap().finish();
+        let _ = ai_off.unmake_move();
         self.board = ai_off.get_board().clone();
         self.moves = ai_off.get_moves().into_iter().map(|m| m.clone()).collect();
         self.board_ai = Some(ai_off.start());
