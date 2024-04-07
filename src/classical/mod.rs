@@ -155,36 +155,84 @@ pub fn create_signature() -> signature::Signature {
     )
 }
 
-pub fn create_game() -> Board {
-    //white team
-    let mut white_pieces = HashMap::new();
-    for x in 0..8u8 {
-        white_pieces.insert(grid_to_sq(x, 1), PieceKind::Pawn(EnCroissantable::No));
-    }
-    white_pieces.insert(grid_to_sq(0, 0), PieceKind::Rook);
-    white_pieces.insert(grid_to_sq(1, 0), PieceKind::Knight);
-    white_pieces.insert(grid_to_sq(2, 0), PieceKind::Bishop);
-    white_pieces.insert(grid_to_sq(3, 0), PieceKind::Queen);
-    white_pieces.insert(grid_to_sq(4, 0), PieceKind::King);
-    white_pieces.insert(grid_to_sq(5, 0), PieceKind::Bishop);
-    white_pieces.insert(grid_to_sq(6, 0), PieceKind::Knight);
-    white_pieces.insert(grid_to_sq(7, 0), PieceKind::Rook);
+pub enum ClassicalGameType {
+    Classical,
+    Grasshopper,
+}
 
-    //black team
-    let mut black_pieces = HashMap::new();
-    for x in 0..8u8 {
-        black_pieces.insert(grid_to_sq(x, 6), PieceKind::Pawn(EnCroissantable::No));
-    }
-    black_pieces.insert(grid_to_sq(0, 7), PieceKind::Rook);
-    black_pieces.insert(grid_to_sq(1, 7), PieceKind::Knight);
-    black_pieces.insert(grid_to_sq(2, 7), PieceKind::Bishop);
-    black_pieces.insert(grid_to_sq(3, 7), PieceKind::Queen);
-    black_pieces.insert(grid_to_sq(4, 7), PieceKind::King);
-    black_pieces.insert(grid_to_sq(5, 7), PieceKind::Bishop);
-    black_pieces.insert(grid_to_sq(6, 7), PieceKind::Knight);
-    black_pieces.insert(grid_to_sq(7, 7), PieceKind::Rook);
+impl ClassicalGameType {
+    pub fn create_game(&self) -> Board {
+        match self {
+            ClassicalGameType::Classical => {
+                //white team
+                let mut white_pieces = HashMap::new();
+                for x in 0..8u8 {
+                    white_pieces.insert(grid_to_sq(x, 1), PieceKind::Pawn(EnCroissantable::No));
+                }
+                white_pieces.insert(grid_to_sq(0, 0), PieceKind::Rook);
+                white_pieces.insert(grid_to_sq(1, 0), PieceKind::Knight);
+                white_pieces.insert(grid_to_sq(2, 0), PieceKind::Bishop);
+                white_pieces.insert(grid_to_sq(3, 0), PieceKind::Queen);
+                white_pieces.insert(grid_to_sq(4, 0), PieceKind::King);
+                white_pieces.insert(grid_to_sq(5, 0), PieceKind::Bishop);
+                white_pieces.insert(grid_to_sq(6, 0), PieceKind::Knight);
+                white_pieces.insert(grid_to_sq(7, 0), PieceKind::Rook);
 
-    Board::new(Team::White, create_signature(), white_pieces, black_pieces)
+                //black team
+                let mut black_pieces = HashMap::new();
+                for x in 0..8u8 {
+                    black_pieces.insert(grid_to_sq(x, 6), PieceKind::Pawn(EnCroissantable::No));
+                }
+                black_pieces.insert(grid_to_sq(0, 7), PieceKind::Rook);
+                black_pieces.insert(grid_to_sq(1, 7), PieceKind::Knight);
+                black_pieces.insert(grid_to_sq(2, 7), PieceKind::Bishop);
+                black_pieces.insert(grid_to_sq(3, 7), PieceKind::Queen);
+                black_pieces.insert(grid_to_sq(4, 7), PieceKind::King);
+                black_pieces.insert(grid_to_sq(5, 7), PieceKind::Bishop);
+                black_pieces.insert(grid_to_sq(6, 7), PieceKind::Knight);
+                black_pieces.insert(grid_to_sq(7, 7), PieceKind::Rook);
+
+                Board::new(Team::White, create_signature(), white_pieces, black_pieces)
+            }
+            ClassicalGameType::Grasshopper => {
+                //white team
+                let mut white_pieces = HashMap::new();
+                for x in 0..8u8 {
+                    white_pieces.insert(grid_to_sq(x, 2), PieceKind::Pawn(EnCroissantable::No));
+                }
+                for x in 0..8u8 {
+                    white_pieces.insert(grid_to_sq(x, 1), PieceKind::Grasshopper);
+                }
+                white_pieces.insert(grid_to_sq(0, 0), PieceKind::Rook);
+                white_pieces.insert(grid_to_sq(1, 0), PieceKind::Knight);
+                white_pieces.insert(grid_to_sq(2, 0), PieceKind::Bishop);
+                white_pieces.insert(grid_to_sq(3, 0), PieceKind::Queen);
+                white_pieces.insert(grid_to_sq(4, 0), PieceKind::King);
+                white_pieces.insert(grid_to_sq(5, 0), PieceKind::Bishop);
+                white_pieces.insert(grid_to_sq(6, 0), PieceKind::Knight);
+                white_pieces.insert(grid_to_sq(7, 0), PieceKind::Rook);
+
+                //black team
+                let mut black_pieces = HashMap::new();
+                for x in 0..8u8 {
+                    black_pieces.insert(grid_to_sq(x, 5), PieceKind::Pawn(EnCroissantable::No));
+                }
+                for x in 0..8u8 {
+                    black_pieces.insert(grid_to_sq(x, 6), PieceKind::Grasshopper);
+                }
+                black_pieces.insert(grid_to_sq(0, 7), PieceKind::Rook);
+                black_pieces.insert(grid_to_sq(1, 7), PieceKind::Knight);
+                black_pieces.insert(grid_to_sq(2, 7), PieceKind::Bishop);
+                black_pieces.insert(grid_to_sq(3, 7), PieceKind::Queen);
+                black_pieces.insert(grid_to_sq(4, 7), PieceKind::King);
+                black_pieces.insert(grid_to_sq(5, 7), PieceKind::Bishop);
+                black_pieces.insert(grid_to_sq(6, 7), PieceKind::Knight);
+                black_pieces.insert(grid_to_sq(7, 7), PieceKind::Rook);
+
+                Board::new(Team::White, create_signature(), white_pieces, black_pieces)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -22,12 +22,14 @@ struct Rect {
 
 struct Textures {
     white_pawn: glium::texture::Texture2d,
+    white_grasshopper: glium::texture::Texture2d,
     white_rook: glium::texture::Texture2d,
     white_knight: glium::texture::Texture2d,
     white_bishop: glium::texture::Texture2d,
     white_queen: glium::texture::Texture2d,
     white_king: glium::texture::Texture2d,
     black_pawn: glium::texture::Texture2d,
+    black_grasshopper: glium::texture::Texture2d,
     black_rook: glium::texture::Texture2d,
     black_knight: glium::texture::Texture2d,
     black_bishop: glium::texture::Texture2d,
@@ -57,12 +59,14 @@ impl Textures {
     fn new(facade: &impl glium::backend::Facade) -> Self {
         Self {
             white_pawn: load_texture(facade, "white pawn.png"),
+            white_grasshopper: load_texture(facade, "white grasshopper.png"),
             white_rook: load_texture(facade, "white rook.png"),
             white_knight: load_texture(facade, "white knight.png"),
             white_bishop: load_texture(facade, "white bishop.png"),
             white_queen: load_texture(facade, "white queen.png"),
             white_king: load_texture(facade, "white king.png"),
             black_pawn: load_texture(facade, "black pawn.png"),
+            black_grasshopper: load_texture(facade, "black grasshopper.png"),
             black_rook: load_texture(facade, "black rook.png"),
             black_knight: load_texture(facade, "black knight.png"),
             black_bishop: load_texture(facade, "black bishop.png"),
@@ -166,8 +170,10 @@ impl GameInterface {
 }
 
 impl Canvas for GameInterface {
-    fn new(facade: &impl glium::backend::Facade) -> Self {
-        let board = create_game();
+    type Init = ClassicalGameType;
+
+    fn new(facade: &impl glium::backend::Facade, init: ClassicalGameType) -> Self {
+        let board = init.create_game();
         let board_ai_off = generic::ai::AiOff::new(board.clone());
         let moves = board_ai_off
             .get_moves()
@@ -422,6 +428,11 @@ impl Canvas for GameInterface {
                     } => &self.textures.white_pawn,
                     Piece {
                         team: Team::White,
+                        kind: PieceKind::Grasshopper,
+                        ..
+                    } => &self.textures.white_grasshopper,
+                    Piece {
+                        team: Team::White,
                         kind: PieceKind::Rook,
                         ..
                     } => &self.textures.white_rook,
@@ -450,6 +461,11 @@ impl Canvas for GameInterface {
                         kind: PieceKind::Pawn(..),
                         ..
                     } => &self.textures.black_pawn,
+                    Piece {
+                        team: Team::Black,
+                        kind: PieceKind::Grasshopper,
+                        ..
+                    } => &self.textures.black_grasshopper,
                     Piece {
                         team: Team::Black,
                         kind: PieceKind::Rook,

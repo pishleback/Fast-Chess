@@ -44,6 +44,7 @@ pub enum EnCroissantable {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum PieceKind {
     Pawn(EnCroissantable),
+    Grasshopper,
     Rook,
     Knight,
     Bishop,
@@ -54,11 +55,12 @@ pub enum PieceKind {
 impl PieceKind {
     pub fn worth(&self) -> Option<i64> {
         match self {
-            PieceKind::Pawn(..) => Some(1),
-            PieceKind::Rook => Some(5),
-            PieceKind::Knight => Some(3),
-            PieceKind::Bishop => Some(3),
-            PieceKind::Queen => Some(9),
+            PieceKind::Pawn(..) => Some(2),
+            PieceKind::Grasshopper => Some(1),
+            PieceKind::Rook => Some(10),
+            PieceKind::Knight => Some(6),
+            PieceKind::Bishop => Some(6),
+            PieceKind::Queen => Some(18),
             PieceKind::King => None,
         }
     }
@@ -120,7 +122,7 @@ pub enum Move {
         rook_piece: Piece,
     },
     EnCroissant {
-        //I know
+        //I know...
         pawn: Piece,
         pawn_from: Square,
         pawn_to: Square,

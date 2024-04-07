@@ -2,17 +2,32 @@ use super::ai::*;
 use super::score::*;
 use super::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GrasshopperVisionKind {
+    Slide,
+    Hurdle,
+    Land,
+}
+
 #[derive(Debug, Clone)]
 enum Vision {
     Teleport {
         piece: Piece,
         from: Square,
+        to: Square,
     },
     Slide {
         piece: Piece,
         from: Square,
         slide: Vec<Square>,
         slide_idx: usize,
+    },
+    Grasshopper {
+        piece: Piece,
+        from: Square,
+        slide: Vec<Square>,
+        slide_idx: usize,
+        kind: GrasshopperVisionKind,
     },
 }
 
@@ -125,6 +140,7 @@ impl PseudoMoves {
                                 Vision::Teleport {
                                     piece: *$piece,
                                     from: *$from_sq,
+                                    to: *to_sq,
                                 },
                                 $piece.team
                             );
@@ -146,6 +162,7 @@ impl PseudoMoves {
                                     Vision::Teleport {
                                         piece: *$piece,
                                         from: *$from_sq,
+                                        to: *to_sq,
                                     },
                                     $piece.team
                                 );
@@ -167,6 +184,7 @@ impl PseudoMoves {
                                     Vision::Teleport {
                                         piece: *$piece,
                                         from: *$from_sq,
+                                        to: *to_sq,
                                     },
                                     $piece.team
                                 );
@@ -185,10 +203,10 @@ impl PseudoMoves {
                         let mut slide_idx = 0;
                         while slide_idx < slide.len() {
                             let to_sq = slide[slide_idx];
-                            match board.get_square(to_sq) {
-                                None => {
-                                    if !done.contains(&to_sq) {
-                                        done.insert(to_sq);
+                            if !done.contains(&to_sq) {
+                                done.insert(to_sq);
+                                match board.get_square(to_sq) {
+                                    None => {
                                         add_vision!(
                                             to_sq,
                                             Vision::Slide {
@@ -210,10 +228,7 @@ impl PseudoMoves {
                                             $piece.team
                                         );
                                     }
-                                }
-                                Some(blocking) => {
-                                    if !done.contains(&to_sq) {
-                                        done.insert(to_sq);
+                                    Some(blocking) => {
                                         if blocking.team != $piece.team {
                                             add_vision!(
                                                 to_sq,
@@ -249,8 +264,112 @@ impl PseudoMoves {
                                                 $piece.team
                                             );
                                         }
+
+                                        break;
                                     }
-                                    break;
+                                }
+                            };
+                            slide_idx += 1;
+                        }
+                    }
+                }
+            }};
+        }
+
+        macro_rules! add_grasshopper_slides {
+            ($all_slides:expr, $piece:expr, $from_sq:expr) => {{
+                let mut done = HashSet::new();
+                for slides in $all_slides {
+                    for slide in slides {
+                        let mut slide_idx = 0;
+                        while slide_idx < slide.len() {
+                            let jump_sq = slide[slide_idx];
+                            if !done.contains(&jump_sq) {
+                                done.insert(jump_sq);
+                                match board.get_square(jump_sq) {
+                                    None => {
+                                        add_vision!(
+                                            jump_sq,
+                                            Vision::Grasshopper {
+                                                piece: $piece,
+                                                from: $from_sq,
+                                                slide: slide.clone(),
+                                                slide_idx: slide_idx,
+                                                kind: GrasshopperVisionKind::Slide
+                                            },
+                                            $piece.team
+                                        );
+                                    }
+                                    Some(hurdle) => {
+                                        add_vision!(
+                                            jump_sq,
+                                            Vision::Grasshopper {
+                                                piece: $piece,
+                                                from: $from_sq,
+                                                slide: slide.clone(),
+                                                slide_idx: slide_idx,
+                                                kind: GrasshopperVisionKind::Hurdle
+                                            },
+                                            $piece.team
+                                        );
+                                        let land_slide_idx = slide_idx + 1;
+                                        if land_slide_idx < slide.len() {
+                                            let land_sq = slide[land_slide_idx];
+                                            match board.get_square(land_sq) {
+                                                None => {
+                                                    add_move!(
+                                                        Move::Standard {
+                                                            from_piece: $piece,
+                                                            to_piece: $piece.moved(),
+                                                            victim: None,
+                                                            from_sq: $from_sq,
+                                                            to_sq: land_sq,
+                                                        },
+                                                        $piece.team
+                                                    );
+                                                    add_vision!(
+                                                        land_sq,
+                                                        Vision::Grasshopper {
+                                                            piece: $piece,
+                                                            from: $from_sq,
+                                                            slide: slide,
+                                                            slide_idx: land_slide_idx,
+                                                            kind: GrasshopperVisionKind::Land
+                                                        },
+                                                        $piece.team
+                                                    );
+                                                }
+                                                Some(land_piece) => {
+                                                    if land_piece.team != $piece.team {
+                                                        if land_piece.kind != PieceKind::King {
+                                                            add_move!(
+                                                                Move::Standard {
+                                                                    from_piece: $piece,
+                                                                    to_piece: $piece.moved(),
+                                                                    victim: Some(land_piece),
+                                                                    from_sq: $from_sq,
+                                                                    to_sq: land_sq,
+                                                                },
+                                                                $piece.team
+                                                            );
+                                                        }
+                                                    }
+                                                    add_vision!(
+                                                        land_sq,
+                                                        Vision::Grasshopper {
+                                                            piece: $piece,
+                                                            from: $from_sq,
+                                                            slide: slide,
+                                                            slide_idx: land_slide_idx,
+                                                            kind: GrasshopperVisionKind::Land
+                                                        },
+                                                        $piece.team
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        break;
+                                    }
                                 }
                             };
                             slide_idx += 1;
@@ -326,6 +445,7 @@ impl PseudoMoves {
                                     Vision::Teleport {
                                         piece: *piece,
                                         from: *from_sq,
+                                        to: *to_sq,
                                     },
                                     piece.team
                                 );
@@ -337,6 +457,7 @@ impl PseudoMoves {
                                         Vision::Teleport {
                                             piece: *piece,
                                             from: *from_sq,
+                                            to: *to_sq,
                                         },
                                         piece.team
                                     );
@@ -355,6 +476,7 @@ impl PseudoMoves {
                                         Vision::Teleport {
                                             piece: *piece,
                                             from: *from_sq,
+                                            to: *to_sq,
                                         },
                                         piece.team
                                     );
@@ -362,6 +484,16 @@ impl PseudoMoves {
                             }
                         }
                     }
+                }
+                PieceKind::Grasshopper => {
+                    add_grasshopper_slides!(
+                        vec![
+                            board.signature.get_flat_slides(*from_sq).clone(),
+                            board.signature.get_diag_slides(*from_sq).clone()
+                        ],
+                        *piece,
+                        *from_sq
+                    );
                 }
                 PieceKind::Rook => {
                     add_slides!(
@@ -448,164 +580,28 @@ impl BoardData {
         let turn = board.get_turn();
 
         let pseudomoves = PseudoMoves::new(board);
-
         let checkers = pseudomoves.get_vision(turn.flip(), board.get_king_square(turn));
         let is_check = !checkers.is_empty();
 
         let is_illegal = |board: &mut Board, pseudo_move: &Move| -> bool {
-            //pseudo_move is legal iff our king is not under attack after making pseudo_move
+            //compile a list of things which might be checking the king after the move is made
+            let mut hot_squares = vec![];
             match pseudo_move {
                 Move::Standard {
                     from_piece,
                     to_piece,
-                    victim: victim_opt,
+                    victim,
                     from_sq,
                     to_sq,
                 } => {
                     if from_piece.kind == PieceKind::King {
                         debug_assert!(to_piece.kind == PieceKind::King);
-                        let to_visions = pseudomoves.get_vision(turn.flip(), *to_sq);
-                        if !to_visions.is_empty() {
-                            return true; //illegal move because we are moving into check
-                        }
-                        if is_check {
-                            //moving the king and currently in check
-                            //need to check whether we are moving into a check obscured by ourself
-                            let from_visions = pseudomoves.get_vision(turn.flip(), *from_sq);
-                            for from_vision in from_visions {
-                                match from_vision {
-                                    Vision::Teleport { .. } => {}
-                                    Vision::Slide {
-                                        slide, slide_idx, ..
-                                    } => {
-                                        if *slide_idx < slide.len() - 1 {
-                                            let danger_sq = slide[slide_idx + 1];
-                                            if *to_sq == danger_sq {
-                                                return true; //illegal move because we are moving into a check which was obscured by ourself
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            return false;
-                        } else {
-                            return false; //moving to a non-checked square is always legal
-                        }
+                        hot_squares.push(*from_sq);
+                        hot_squares.push(*to_sq);
                     } else {
-                        //find all pieces we are pinned by
-                        let mut pinners = vec![];
-                        board.make_move(pseudo_move.clone());
-                        for pinner_vis in pseudomoves.get_vision(turn.flip(), *from_sq) {
-                            match pinner_vis {
-                                Vision::Teleport { .. } => {}
-                                Vision::Slide {
-                                    piece: _pinner_piece,
-                                    from: _pinner_from,
-                                    slide: pinner_slide,
-                                    slide_idx: _pinner_slide_idx,
-                                } => {
-                                    'PIN_LOOP: for danger_sq in pinner_slide {
-                                        //compute whether we are in check after making pseudomove
-                                        match board.get_square(*danger_sq) {
-                                            Some(Piece { kind, team, .. }) => {
-                                                if kind == PieceKind::King && team == turn {
-                                                    pinners.push(pinner_vis);
-                                                }
-                                                break 'PIN_LOOP;
-                                            }
-                                            None => {}
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        board.unmake_move().unwrap();
-                        match pinners.len() {
-                            0 => {
-                                //not pinned
-                            }
-                            1 => {
-                                //pinned by one piece. Legal iff we are taking it
-                                match pinners[0] {
-                                    Vision::Teleport { .. } => panic!(),
-                                    Vision::Slide {
-                                        piece: pinner_piece,
-                                        from: pinner_from,
-                                        slide: _pinner_slide,
-                                        slide_idx: _pinner_slide_idx,
-                                    } => {
-                                        if to_sq == pinner_from {
-                                            debug_assert_eq!(victim_opt.unwrap(), *pinner_piece);
-                                        } else {
-                                            return true; //we are not taking the pinner piece, so this move is illegal
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                //pinned by two or more pieces. Never legal to move
-                                return true;
-                            }
-                        }
-
-                        //from here onwards we are not pinned
-                        if is_check {
-                            debug_assert!(checkers.len() >= 1);
-                            if checkers.len() == 1 {
-                                let unique_sliding_checker = &checkers[0];
-                                match victim_opt {
-                                    Some(victim) => {
-                                        let (checking_piece, checking_from) =
-                                            match unique_sliding_checker {
-                                                Vision::Teleport {
-                                                    piece: checking_piece,
-                                                    from: checking_from,
-                                                } => (checking_piece, checking_from),
-                                                Vision::Slide {
-                                                    piece: checking_piece,
-                                                    from: checking_from,
-                                                    slide: _checking_slide,
-                                                    slide_idx: _checking_slide_idx,
-                                                } => (checking_piece, checking_from),
-                                            };
-                                        if to_sq == checking_from {
-                                            debug_assert_eq!(victim, checking_piece);
-                                            return false; //taking a unique checking piece is legal
-                                        }
-                                    }
-                                    None => {}
-                                }
-                            }
-                            //we are in check and taking any checking pieces is not legal
-                            for checker in checkers {
-                                match checker {
-                                    Vision::Teleport { .. } => {
-                                        return true; //in check by a teleporter, not moving the king, and not taking the checker is not legal
-                                    }
-                                    Vision::Slide { .. } => {}
-                                }
-                            }
-                            //we are in check only by sliders and taking a checking slider is not legal
-                            if checkers.iter().all(|checker| match checker {
-                                Vision::Teleport { .. } => panic!(),
-                                Vision::Slide {
-                                    piece: _checking_piece,
-                                    from: _checking_from,
-                                    slide: checking_slide,
-                                    slide_idx: checking_slide_idx,
-                                } => (0..*checking_slide_idx)
-                                    .map(|block_idx| checking_slide[block_idx])
-                                    .any(|block_sq| block_sq == *to_sq),
-                            }) {
-                                //the move blocks all checking sliders so is legal
-                                false
-                            } else {
-                                //the move failed to block all checking sliders so is illegal
-                                true
-                            }
-                        } else {
-                            return false; //not pinned and not in check is a legal move
-                        }
+                        hot_squares.push(board.get_king_square(turn));
+                        hot_squares.push(*from_sq);
+                        hot_squares.push(*to_sq);
                     }
                 }
                 Move::Castle {
@@ -613,27 +609,442 @@ impl BoardData {
                     king_through,
                     king_to,
                     king_piece,
-                    ..
+                    rook_from,
+                    rook_to,
+                    rook_piece,
                 } => {
-                    if king_piece.kind == PieceKind::King {
-                        //castling with a king
-                        //musn't be in check, moving through check, or end in check
-                        for sq in king_through.into_iter().chain(vec![king_from, king_to]) {
-                            if !pseudomoves.get_vision(turn.flip(), *sq).is_empty() {
-                                return true;
-                            }
-                        }
-                        false
-                    } else {
-                        //castling with something else e.g. prince
-                        true
+                    hot_squares.push(*king_from);
+                    for sq in king_through {
+                        hot_squares.push(*sq);
                     }
+                    hot_squares.push(*king_to);
+                    hot_squares.push(*rook_from);
+                    hot_squares.push(*rook_to);
                 }
-                Move::EnCroissant { .. } => {
-                    false //todo
+                Move::EnCroissant {
+                    pawn,
+                    pawn_from,
+                    pawn_to,
+                    victim,
+                    victim_sq,
+                } => {
+                    hot_squares.push(*pawn_from);
+                    hot_squares.push(*pawn_to);
+                    hot_squares.push(*victim_sq);
                 }
             }
+
+            let mut hot_vis = vec![];
+            for hot_sq in hot_squares {
+                for vis in pseudomoves.get_vision(turn.flip(), hot_sq) {
+                    hot_vis.push(vis);
+                }
+            }
+
+            board.make_move(pseudo_move.clone());
+            let new_king_sq = board.get_king_square(turn);
+
+            let mut is_illegal = false;
+
+            //go through each possible check and see if it is actually a checker
+            'IS_ILLEGAL: for possible_checker in hot_vis {
+                match possible_checker {
+                    Vision::Teleport { piece, from, to } => match board.get_square(*from) {
+                        Some(after_piece) => {
+                            if after_piece.team == piece.team && *to == new_king_sq {
+                                is_illegal = true;
+                                break 'IS_ILLEGAL;
+                            }
+                        }
+                        None => {}
+                    },
+                    Vision::Slide {
+                        piece,
+                        from,
+                        slide,
+                        slide_idx,
+                    } => match board.get_square(*from) {
+                        Some(after_piece) => {
+                            if after_piece.team == piece.team {
+                                for sq in slide {
+                                    match board.get_square(*sq) {
+                                        Some(slide_piece) => {
+                                            if *sq == new_king_sq {
+                                                is_illegal = true;
+                                                break 'IS_ILLEGAL;
+                                            }
+                                            break;
+                                        }
+                                        None => {}
+                                    }
+                                }
+                            }
+                        }
+                        None => {}
+                    },
+                    Vision::Grasshopper {
+                        piece,
+                        from,
+                        slide,
+                        slide_idx,
+                        kind,
+                    } => match board.get_square(*from) {
+                        Some(after_piece) => {
+                            if after_piece.team == piece.team {
+                                for idx in 0..(slide.len() - 1) {
+                                    let slide_sq = slide[idx];
+                                    match board.get_square(slide_sq) {
+                                        Some(hurdle_piece) => {
+                                            let land_sq = slide[idx + 1];
+                                            if land_sq == new_king_sq {
+                                                is_illegal = true;
+                                                break 'IS_ILLEGAL;
+                                            }
+                                            break;
+                                        }
+                                        None => {}
+                                    }
+                                }
+                            }
+                        }
+                        None => {}
+                    },
+                }
+            }
+
+            board.unmake_move().unwrap();
+            is_illegal
         };
+
+        // let is_illegal_old = |board: &mut Board, pseudo_move: &Move| -> bool {
+        //     //pseudo_move is legal iff our king is not under attack after making pseudo_move
+        //     match pseudo_move {
+        //         Move::Standard {
+        //             from_piece,
+        //             to_piece,
+        //             victim: victim_opt,
+        //             from_sq,
+        //             to_sq,
+        //         } => {
+        //             if from_piece.kind == PieceKind::King {
+        //                 debug_assert!(to_piece.kind == PieceKind::King);
+        //                 let to_visions = pseudomoves.get_vision(turn.flip(), *to_sq);
+
+        //                 //if we are moving into check then it is an illegal move
+        //                 //grasshopper checks with us as the hurdle do not count, so lets filter those out
+        //                 let to_visions = to_visions
+        //                     .into_iter()
+        //                     .filter(|vision| match vision {
+        //                         Vision::Teleport { .. } => true,
+        //                         Vision::Slide { .. } => true,
+        //                         Vision::GrasshopperSlide { .. } => false,
+        //                         Vision::GrasshopperHurdle { .. } => false,
+        //                         Vision::GrasshopperLand {
+        //                             piece,
+        //                             from,
+        //                             slide,
+        //                             slide_idx,
+        //                         } => slide[slide_idx - 1] != *from_sq,
+        //                     })
+        //                     .collect::<Vec<_>>();
+
+        //                 if !to_visions.is_empty() {
+        //                     //probably an illegal move because we are moving into check
+        //                     //unless the check we are moving into is a grasshopper with us as the hurdle, so lets rule that out
+        //                     return true;
+        //                 }
+
+        //                 if is_check {
+        //                     //moving the king and currently in check
+        //                     //need to check whether we are moving into a check obscured by ourself
+        //                     let from_visions = pseudomoves.get_vision(turn.flip(), *from_sq);
+        //                     for from_vision in from_visions {
+        //                         match from_vision {
+        //                             Vision::Teleport { .. } => {}
+        //                             Vision::Slide {
+        //                                 slide, slide_idx, ..
+        //                             } => {
+        //                                 if *slide_idx < slide.len() - 1 {
+        //                                     let danger_sq = slide[slide_idx + 1];
+        //                                     if *to_sq == danger_sq {
+        //                                         return true; //illegal move because we are moving into a check which was obscured by ourself
+        //                                     }
+        //                                 }
+        //                             }
+        //                             Vision::GrasshopperSlide { .. } => {}
+        //                             Vision::GrasshopperHurdle { .. } => {}
+        //                             Vision::GrasshopperLand { .. } => {}
+        //                         }
+        //                     }
+        //                     return false;
+        //                 } else {
+        //                     return false; //moving to a non-checked square is always legal
+        //                 }
+        //             } else {
+        //                 //find all pieces we are pinned by
+        //                 let mut pinners = vec![];
+        //                 board.make_move(pseudo_move.clone());
+        //                 for pinner_vis in pseudomoves.get_vision(turn.flip(), *from_sq) {
+        //                     match pinner_vis {
+        //                         Vision::Teleport { .. } => {}
+        //                         Vision::Slide {
+        //                             piece: _pinner_piece,
+        //                             from: _pinner_from,
+        //                             slide: pinner_slide,
+        //                             slide_idx: _pinner_slide_idx,
+        //                         } => {
+        //                             'PIN_LOOP: for danger_sq in pinner_slide {
+        //                                 //compute whether we are in check after making pseudomove
+        //                                 match board.get_square(*danger_sq) {
+        //                                     Some(Piece { kind, team, .. }) => {
+        //                                         if kind == PieceKind::King && team == turn {
+        //                                             pinners.push(pinner_vis);
+        //                                         }
+        //                                         break 'PIN_LOOP;
+        //                                     }
+        //                                     None => {}
+        //                                 }
+        //                             }
+        //                         }
+        //                         Vision::GrasshopperSlide { .. } => {
+        //                             panic!()
+        //                         }
+        //                         Vision::GrasshopperHurdle {
+        //                             piece,
+        //                             from,
+        //                             slide: gh_pinner_slide,
+        //                             slide_idx,
+        //                         } => {
+        //                             'PIN_LOOP: for hurdle_sq_idx in 0..(gh_pinner_slide.len() - 1) {
+        //                                 //compute whether we are in check after making pseudomove
+        //                                 let hurdle_sq = gh_pinner_slide[hurdle_sq_idx];
+        //                                 match board.get_square(hurdle_sq) {
+        //                                     Some(Piece { kind, team, .. }) => {
+        //                                         let land_sq_idx = hurdle_sq_idx + 1;
+        //                                         if land_sq_idx < gh_pinner_slide.len() {
+        //                                             let land_sq = gh_pinner_slide[land_sq_idx];
+        //                                             match board.get_square(land_sq) {
+        //                                                 Some(Piece { kind, team, .. }) => {
+        //                                                     if kind == PieceKind::King
+        //                                                         && team == turn
+        //                                                     {
+        //                                                         pinners.push(pinner_vis);
+        //                                                     }
+        //                                                 }
+        //                                                 None => {}
+        //                                             }
+        //                                         }
+        //                                         break 'PIN_LOOP;
+        //                                     }
+        //                                     None => {}
+        //                                 }
+        //                             }
+        //                         }
+        //                         Vision::GrasshopperLand {
+        //                             piece,
+        //                             from,
+        //                             slide,
+        //                             slide_idx,
+        //                         } => {}
+        //                     }
+        //                 }
+        //                 board.unmake_move().unwrap();
+        //                 match pinners.len() {
+        //                     0 => {
+        //                         //not pinned
+        //                     }
+        //                     1 => {
+        //                         //pinned by one piece. Legal iff we are taking it
+        //                         match pinners[0] {
+        //                             Vision::Teleport { .. } => panic!(),
+        //                             Vision::Slide {
+        //                                 piece: pinner_piece,
+        //                                 from: pinner_from,
+        //                                 slide: _pinner_slide,
+        //                                 slide_idx: _pinner_slide_idx,
+        //                             } => {
+        //                                 if to_sq == pinner_from {
+        //                                     debug_assert_eq!(victim_opt.unwrap(), *pinner_piece);
+        //                                 } else {
+        //                                     return true; //we are not taking the pinner piece, so this move is illegal
+        //                                 }
+        //                             }
+        //                             Vision::GrasshopperSlide { .. } => {
+        //                                 panic!()
+        //                             }
+        //                             Vision::GrasshopperHurdle {
+        //                                 piece: pinner_piece,
+        //                                 from: pinner_from,
+        //                                 slide: _pinner_slide,
+        //                                 slide_idx: _pinner_slide_idx,
+        //                             } => {
+        //                                 if to_sq == pinner_from {
+        //                                     debug_assert_eq!(victim_opt.unwrap(), *pinner_piece);
+        //                                 } else {
+        //                                     return true; //we are not taking the pinner piece, so this move is illegal
+        //                                 }
+        //                             }
+        //                             Vision::GrasshopperLand { .. } => panic!(),
+        //                         }
+        //                     }
+        //                     _ => {
+        //                         //pinned by two or more pieces. Never legal to move
+        //                         return true;
+        //                     }
+        //                 }
+
+        //                 //check if the to_square of the move is pinned by a grasshopper
+        //                 for gh_pinner_vis in pseudomoves.get_vision(turn.flip(), *to_sq) {
+        //                     match gh_pinner_vis {
+        //                         Vision::Teleport { .. } => {}
+        //                         Vision::Slide { .. } => {}
+        //                         Vision::GrasshopperSlide {
+        //                             piece,
+        //                             from,
+        //                             slide,
+        //                             slide_idx,
+        //                         } => {
+        //                             let pin_land_idx = slide_idx + 1;
+        //                             if pin_land_idx < slide.len() {
+        //                                 let pin_land_sq = slide[pin_land_idx];
+        //                                 if pin_land_sq == board.get_king_square(turn) {
+        //                                     return true;
+        //                                 }
+        //                             }
+        //                         }
+        //                         Vision::GrasshopperHurdle { .. } => {}
+        //                         Vision::GrasshopperLand { .. } => {}
+        //                     }
+        //                 }
+
+        //                 //from here onwards we are not pinned
+        //                 //now need to check that performing the move will eliminate all existing checks
+
+        //                 if is_check {
+        //                     debug_assert!(checkers.len() >= 1);
+        //                     if checkers.len() == 1 {
+        //                         let unique_checker = &checkers[0];
+        //                         match victim_opt {
+        //                             Some(victim) => {
+        //                                 let (checking_piece, checking_from) = match unique_checker {
+        //                                     Vision::Teleport {
+        //                                         piece: checking_piece,
+        //                                         from: checking_from,
+        //                                         to: checking_to,
+        //                                     } => (checking_piece, checking_from),
+        //                                     Vision::Slide {
+        //                                         piece: checking_piece,
+        //                                         from: checking_from,
+        //                                         slide: _checking_slide,
+        //                                         slide_idx: _checking_slide_idx,
+        //                                     } => (checking_piece, checking_from),
+        //                                     Vision::GrasshopperSlide {
+        //                                         piece: checking_piece,
+        //                                         from: checking_from,
+        //                                         slide: _checking_slide,
+        //                                         slide_idx: _checking_slide_idx,
+        //                                     } => (checking_piece, checking_from),
+        //                                     Vision::GrasshopperHurdle {
+        //                                         piece: checking_piece,
+        //                                         from: checking_from,
+        //                                         slide: _checking_slide,
+        //                                         slide_idx: _checking_slide_idx,
+        //                                     } => (checking_piece, checking_from),
+        //                                     Vision::GrasshopperLand {
+        //                                         piece: checking_piece,
+        //                                         from: checking_from,
+        //                                         slide: _checking_slide,
+        //                                         slide_idx: _checking_slide_idx,
+        //                                     } => (checking_piece, checking_from),
+        //                                 };
+        //                                 if to_sq == checking_from {
+        //                                     debug_assert_eq!(victim, checking_piece);
+        //                                     return false; //taking a unique checking piece is legal
+        //                                 }
+        //                             }
+        //                             None => {}
+        //                         }
+        //                     }
+        //                     //we are in check and taking any checking pieces is not legal
+        //                     for checker in checkers {
+        //                         match checker {
+        //                             Vision::Teleport { .. } => {
+        //                                 return true; //in check by a teleporter, not moving the king, and not taking the checker is not legal
+        //                             }
+        //                             Vision::Slide { .. } => {}
+        //                             Vision::GrasshopperSlide { .. } => panic!(),
+        //                             Vision::GrasshopperHurdle { .. } => {}
+        //                             Vision::GrasshopperLand { .. } => {}
+        //                         }
+        //                     }
+        //                     //we are in check only by sliders and taking a checking slider is not legal
+        //                     if checkers.iter().all(|checker| match checker {
+        //                         Vision::Teleport { .. } => panic!(),
+        //                         Vision::Slide {
+        //                             piece: _checking_piece,
+        //                             from: _checking_from,
+        //                             slide: checking_slide,
+        //                             slide_idx: checking_slide_idx,
+        //                         } => {
+        //                             //block a sliding move check by blocking its runup
+        //                             (0..*checking_slide_idx)
+        //                                 .map(|block_idx| checking_slide[block_idx])
+        //                                 .any(|block_sq| block_sq == *to_sq)
+        //                         }
+        //                         Vision::GrasshopperSlide { .. } => {
+        //                             panic!()
+        //                         }
+        //                         Vision::GrasshopperHurdle { .. } => true,
+        //                         Vision::GrasshopperLand {
+        //                             piece: _checking_piece,
+        //                             from: _checking_from,
+        //                             slide: checking_slide,
+        //                             slide_idx: checking_slide_idx,
+        //                         } => {
+        //                             //block a grasshopper move check by blocking its runup or removing its hurdle
+        //                             (0..*checking_slide_idx)
+        //                                 .map(|block_idx| checking_slide[block_idx])
+        //                                 .any(|block_sq| block_sq == *to_sq)
+        //                                 || checking_slide[checking_slide_idx - 1] == *from_sq
+        //                         }
+        //                     }) {
+        //                         //the move blocks all checking sliders so is legal
+        //                         false
+        //                     } else {
+        //                         //the move failed to block all checking sliders so is illegal
+        //                         true
+        //                     }
+        //                 } else {
+        //                     return false; //not pinned and not in check is a legal move
+        //                 }
+        //             }
+        //         }
+        //         Move::Castle {
+        //             king_from,
+        //             king_through,
+        //             king_to,
+        //             king_piece,
+        //             ..
+        //         } => {
+        //             if king_piece.kind == PieceKind::King {
+        //                 //castling with a king
+        //                 //musn't be in check, moving through check, or end in check
+        //                 for sq in king_through.into_iter().chain(vec![king_from, king_to]) {
+        //                     if !pseudomoves.get_vision(turn.flip(), *sq).is_empty() {
+        //                         return true;
+        //                     }
+        //                 }
+        //                 false
+        //             } else {
+        //                 //castling with something else e.g. prince
+        //                 true
+        //             }
+        //         }
+        //         Move::EnCroissant { .. } => {
+        //             false //todo
+        //         }
+        //     }
+        // };
 
         let mut moves: Vec<Move> = vec![];
         for pseudo_move in pseudomoves.get_pseudomoves(turn) {
@@ -649,14 +1060,21 @@ impl BoardData {
                         test_board.make_move(pseudo_move.clone());
                         let test_board_pseudomoves = PseudoMoves::new(&test_board);
                         let king_square = test_board.get_king_square(turn);
-                        let test_illegal = !test_board_pseudomoves
+                        let test_illegal = test_board_pseudomoves
                             .get_vision(turn.flip(), king_square)
-                            .is_empty();
+                            .into_iter()
+                            .any(|vis| match vis {
+                                Vision::Teleport { .. } => true,
+                                Vision::Slide { .. } => true,
+                                Vision::Grasshopper { kind, .. } => {
+                                    *kind == GrasshopperVisionKind::Land
+                                }
+                            });
                         test_board.unmake_move().unwrap();
                         if test_illegal != illegal {
                             println!("NUM = {:?}", board.get_move_num());
                             println!("MOVES = {:#?}", board.moves);
-                            println!("DODGY MOVE = {:?}", pseudo_move);
+                            println!("DODGY MOVE = {:#?}", pseudo_move);
                         }
                         assert_eq!(test_illegal, illegal);
                     }
@@ -730,6 +1148,7 @@ impl BoardData {
                         let from_piece = match &vision {
                             Vision::Teleport { piece, .. } => piece,
                             Vision::Slide { piece, .. } => piece,
+                            Vision::Grasshopper { piece, .. } => piece,
                         };
                         if from_piece.kind != PieceKind::King {
                             let from_worth = from_piece.kind.worth().unwrap();

@@ -8,11 +8,13 @@ pub struct State {
 }
 
 pub trait Canvas {
-    fn new(facade: &impl Facade) -> Self;
+    type Init;
+
+    fn new(facade: &impl Facade, init : Self::Init) -> Self;
     fn tick(&mut self, state: &State, dt: f64);
     fn draw(&mut self, state: &State, display: &Display);
     fn event(&mut self, state: &State, ev: &Event<'_, ()>);
-    fn run(init: impl FnOnce(&mut Self)) -> !
+    fn run(init : Self::Init) -> !
     where
         Self: Sized + 'static,
     {
@@ -37,8 +39,7 @@ pub trait Canvas {
         //    window with the events_loop.
         let display = glium::Display::new(wb, cb, &event_loop).unwrap();
 
-        let mut canvas = Self::new(&display);
-        init(&mut canvas);
+        let mut canvas = Self::new(&display, init);
 
         let mut state = State {
             mouse_pos: (0.0, 0.0),
