@@ -1,9 +1,12 @@
+use std::time::{Duration, Instant};
+
 use glium::glutin::event::ElementState;
 use glium::{implement_vertex, uniform, Program, Surface};
 
 use crate::classical;
 use crate::graphical::Canvas;
 
+use self::ai::BigData;
 use self::{Move, MoveIdx};
 
 use super::super::generic;
@@ -110,15 +113,14 @@ struct MoveButton {
 }
 
 pub struct GameInterface {
-    // board: Board,
     board: Board,
     moves: Vec<Move>,
     board_ai: Option<generic::ai::AiOn>,
     show_white_ai: bool,
     show_black_ai: bool,
-    // moves: Vec<generic::info::Move>,
-    // best_move_idx: Option<MoveIdx>,
     move_buttons: Vec<MoveButton>,
+    big_datas: Vec<Box<dyn BigData>>,
+    last_action_time: Instant,
     selected: Option<(u8, u8)>,
     textures: Textures,
     board_program: Program,
@@ -165,11 +167,6 @@ impl GameInterface {
 
 impl Canvas for GameInterface {
     fn new(facade: &impl glium::backend::Facade) -> Self {
-        // let mut board = create_game();
-        // let turn = board.get_turn();
-        // let mut info = board.generate_info();
-        // let best_move_idx = info.best_move(&mut board);
-        // let moves = info.get_moves(turn).clone();
         let board = create_game();
         let board_ai_off = generic::ai::AiOff::new(board.clone());
         let moves = board_ai_off
@@ -180,9 +177,6 @@ impl Canvas for GameInterface {
         let board_ai = board_ai_off.start();
 
         Self {
-            // board,
-            // moves,
-            // best_move_idx: board.get_best_move(),
             board,
             moves,
             board_ai: Some(board_ai),
@@ -190,6 +184,8 @@ impl Canvas for GameInterface {
             show_black_ai: true,
             move_buttons: vec![],
             selected: None,
+            big_datas: vec![],
+            last_action_time: Instant::now(),
             textures: Textures::new(facade),
             board_program: {
                 let vertex_shader_src = r#"
@@ -355,6 +351,13 @@ impl Canvas for GameInterface {
     fn tick(&mut self, state: &crate::graphical::State, dt: f64) {
         let _ = &state;
         let _ = &dt;
+        if Instant::now() - self.last_action_time > Duration::from_millis(1000)
+            && !self.big_datas.is_empty()
+        {
+            println!("Started Cleanup...");
+            self.big_datas = vec![];
+            println!("Finished Cleanup");
+        }
     }
 
     fn draw(&mut self, state: &crate::graphical::State, display: &glium::Display) {
@@ -753,10 +756,12 @@ impl GameInterface {
     fn make_move(&mut self, m: MoveIdx) {
         self.set_selected(None);
         let (mut ai_off, _best_move) = self.board_ai.take().unwrap().finish();
-        ai_off.make_move(m);
+        let big_data = ai_off.make_move(m);
+        self.big_datas.push(big_data);
         self.board = ai_off.get_board().clone();
         self.moves = ai_off.get_moves().into_iter().map(|m| m.clone()).collect();
         self.board_ai = Some(ai_off.start());
+        self.last_action_time = Instant::now();
     }
 
     fn unmake_move(&mut self) {
@@ -766,5 +771,6 @@ impl GameInterface {
         self.board = ai_off.get_board().clone();
         self.moves = ai_off.get_moves().into_iter().map(|m| m.clone()).collect();
         self.board_ai = Some(ai_off.start());
+        self.last_action_time = Instant::now();
     }
 }

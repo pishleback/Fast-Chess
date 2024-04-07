@@ -336,13 +336,16 @@ impl BoardData {
 #[derive(Debug)]
 pub struct BoardTree {
     board: Board,
-    root: BoardData,
+    root: Box<BoardData>,
 }
 
 impl BoardTree {
     pub fn new(mut board: Board) -> Self {
         let root = BoardData::new(&mut board);
-        let tree = BoardTree { board, root };
+        let tree = BoardTree {
+            board,
+            root: root.into(),
+        };
         tree
     }
 
@@ -417,25 +420,34 @@ impl BoardTree {
         }
     }
 
-    pub fn make_move(&mut self, m: MoveIdx) {
+    pub fn make_move(&mut self, m: MoveIdx) -> Box<dyn BigData> {
         let md = self.root.get_move_mut(m);
         self.board.make_move(md.mv.clone());
-        self.root = match &md.board {
+
+        let mut alt_root = Box::new(match &md.board {
             Some(board) => board.clone(),
             None => md.get_board(&mut self.board).clone(),
-        }
+        });
+        std::mem::swap(&mut self.root, &mut alt_root);
+        alt_root
     }
 
     pub fn unmake_move(&mut self) -> Result<(), ()> {
         match self.board.unmake_move() {
             Ok(()) => {
-                self.root = BoardData::new(&mut self.board);
+                self.root = BoardData::new(&mut self.board).into();
                 Ok(())
             }
             Err(()) => Err(()),
         }
     }
 }
+
+pub trait BigData {}
+
+impl BoardData {}
+
+impl BigData for BoardData {}
 
 #[derive(Debug)]
 pub struct AiOn {
@@ -506,8 +518,8 @@ impl AiOff {
         self.tree.root.get_moves()
     }
 
-    pub fn make_move(&mut self, m: MoveIdx) {
-        self.tree.make_move(m);
+    pub fn make_move(&mut self, m: MoveIdx) -> Box<dyn BigData> {
+        self.tree.make_move(m)
     }
 
     pub fn unmake_move(&mut self) -> Result<(), ()> {
