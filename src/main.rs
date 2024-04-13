@@ -6,5 +6,5 @@ pub mod generic;
 pub mod graphical;
 
 fn main() {
-    classical::graphical::GameInterface::run(ClassicalGameType::Grasshopper);
+    classical::graphical::GameInterface::run(ClassicalGameType::Classical);
 }

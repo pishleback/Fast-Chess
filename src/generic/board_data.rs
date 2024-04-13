@@ -613,6 +613,36 @@ impl BoardData {
                     rook_to,
                     rook_piece,
                 } => {
+                    if king_piece.kind == PieceKind::King {
+                        if is_check {
+                            return true; //can't castle while in check
+                        }
+                        for through in king_through {
+                            //can't castle through check
+                            for vis in pseudomoves.get_vision(turn.flip(), through.clone()) {
+                                match vis {
+                                    Vision::Teleport { .. } => {
+                                        return true;
+                                    }
+                                    Vision::Slide { .. } => {
+                                        return true;
+                                    }
+                                    Vision::Grasshopper {
+                                        piece,
+                                        from,
+                                        slide,
+                                        slide_idx,
+                                        kind,
+                                    } => {
+                                        if kind == &GrasshopperVisionKind::Land {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     hot_squares.push(*king_from);
                     for sq in king_through {
                         hot_squares.push(*sq);

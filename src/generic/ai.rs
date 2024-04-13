@@ -465,7 +465,7 @@ impl AiOn {
         let mut depth = 1;
         println!("Search started");
         loop {
-            match tree.best_move_at_depth(depth - 1, depth * 3 - 1, 2000000, stop_flag.clone()) {
+            match tree.best_move_at_depth(depth - 1, depth * 3 - 1, 1000000, stop_flag.clone()) {
                 Ok(None) => {
                     println!("No moves");
                     break;
