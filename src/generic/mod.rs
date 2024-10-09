@@ -83,26 +83,6 @@ impl Piece {
     }
 }
 
-/*
-Board:
-  Vec<MoveGenerator>
-
-MoveGenerator:
-  Vec<Move>
-
-Move:
-  Vec<Effect>
-
-
-
-
-#[derive(Debug, Clone)]
-pub enum Effect {
-    Remove { piece: Piece, square: Square },
-    Place { piece: Piece, square: Square },
-}
-*/
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Move {
     Standard {
